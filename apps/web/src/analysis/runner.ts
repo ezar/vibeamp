@@ -74,6 +74,13 @@ export class AnalysisRunner {
     this.running = true;
 
     try {
+      // Records whose file this session cannot reach. They stay pending in the
+      // database, because the folder may be reconnected later, but they are skipped
+      // for the rest of this run. Without this the loop re-fetches the same
+      // unreachable records forever at full speed, and a batch of them also starves
+      // every reachable track queued behind them.
+      const unreachable = new Set<string>();
+
       while (this.running) {
         const reason = await this.pauseReason();
         if (reason !== null) {
@@ -82,15 +89,24 @@ export class AnalysisRunner {
           continue;
         }
 
-        const batch = await this.options.repository.pendingTracks(BATCH_SIZE);
+        // Asking for the skipped ones too, so the query reaches past them to the
+        // tracks that can still be analysed.
+        const fetched = await this.options.repository.pendingTracks(BATCH_SIZE + unreachable.size);
+        const batch = fetched.filter((track) => !unreachable.has(track.id));
         if (batch.length === 0) break;
 
         for (const track of batch) {
           if (!this.running) return;
           if ((await this.pauseReason()) !== null) break;
-          await this.analyseOne(track);
+          if ((await this.analyseOne(track)) === 'unreachable') unreachable.add(track.id);
         }
       }
+
+      // Percentiles written earlier were measured against a smaller library, so a
+      // long run leaves its first tracks ranked against a fraction of the evidence
+      // its last ones got. Re-ranking once at the end is one pass over the table and
+      // never touches the audio again.
+      if (this.analysed > 0) await this.options.repository.renormaliseAll();
     } finally {
       this.running = false;
       this.stage = null;
@@ -103,7 +119,14 @@ export class AnalysisRunner {
     this.running = false;
   }
 
-  private async analyseOne(track: Track): Promise<void> {
+  /**
+   * Analyse one track.
+   *
+   * @returns `'unreachable'` when the file cannot be opened in this session, so the
+   *   caller can stop offering it; `'attempted'` for everything else, including
+   *   failures, because those change the track's status and leave the queue.
+   */
+  private async analyseOne(track: Track): Promise<'attempted' | 'unreachable'> {
     const { repository, pool, resolveFile, stats } = this.options;
     this.currentTitle = track.meta.title ?? track.fileName;
     const startedAt = Date.now();
@@ -111,14 +134,14 @@ export class AnalysisRunner {
     const file = await resolveFile(track);
     if (file === null) {
       // Not a failure of the file: the folder is simply not connected right now, so
-      // the track keeps its pending status and waits.
-      return;
+      // the track keeps its pending status and waits for a session that can see it.
+      return 'unreachable';
     }
 
     // Waiting for a worker before decoding is the back pressure. Reversing these two
     // lines is what fills the heap with 19 MB buffers and gets the tab killed.
     await pool.waitForSlot();
-    if (!this.running) return;
+    if (!this.running) return 'attempted';
 
     await repository.setStatus(track.id, 'decoding');
     let decoded;
@@ -130,7 +153,7 @@ export class AnalysisRunner {
       const message = error instanceof Error ? error.message : String(error);
       stats?.noteFailure(track.id, 'decode', message);
       await repository.recordFailure(track.id, message, !(error instanceof UndecodableError));
-      return;
+      return 'attempted';
     }
 
     await repository.setStatus(track.id, 'analyzing');
@@ -153,6 +176,7 @@ export class AnalysisRunner {
 
     const counts = await repository.counts();
     this.report(counts.pending + counts.failed, null);
+    return 'attempted';
   }
 
   /** Why the analysis should not be running, or `null` if it should. */

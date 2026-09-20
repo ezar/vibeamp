@@ -114,7 +114,15 @@ export function percentileOf(histogram: Histogram, value: number): number {
 
   const { min, max } = histogram;
   const bucketWidth = (max - min) / BUCKET_COUNT;
-  const positionInBucket = bucketWidth === 0 ? 0.5 : ((value - min) / bucketWidth) % 1;
+
+  // Measured from this bucket's own start, with the value clamped into the
+  // histogram first. Taking the remainder of the raw offset instead wraps at the
+  // far edge: a value sitting exactly on `max` lands in the last bucket but scores
+  // 0 within it, so the loudest track in a library comes out as its quietest.
+  const clamped = value < min ? min : value > max ? max : value;
+  const bucketStart = min + bucket * bucketWidth;
+  const positionInBucket = bucketWidth === 0 ? 0.5 : (clamped - bucketStart) / bucketWidth;
+
   const rank = below + inBucket * clamp01(positionInBucket);
   return clamp01(rank / histogram.total);
 }

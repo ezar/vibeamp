@@ -147,7 +147,13 @@ export function App(): React.JSX.Element {
 
       // Playable immediately, before a single track has been analysed. The app has
       // to be useful in its first minute, not after its first hour.
-      const tracks = await current.services.repository.pendingTracks(scanned.length);
+      //
+      // Every track the scan found, whatever its status. Asking only for pending
+      // ones leaves the playlist empty whenever a folder was already analysed on a
+      // previous visit, which is the common case on every visit after the first.
+      const tracks = await current.services.repository.getMany(
+        scanned.map((entry) => entry.track.id),
+      );
       const byId = new Map(tracks.map((track) => [track.id, track]));
       current.bridge.replaceAll(
         scanned

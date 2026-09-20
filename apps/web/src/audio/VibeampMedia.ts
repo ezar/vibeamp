@@ -184,8 +184,14 @@ export class VibeampMedia {
    *
    * When something is already playing and a cross-fade is configured, the new track
    * goes onto the idle deck and the two are ramped past each other. Otherwise it
-   * replaces what is on the active deck, which is the gapless-free behaviour the
-   * original had.
+   * replaces what is on the active deck.
+   *
+   * **This only fades on a manual skip.** On ordinary advance the shell asks for the
+   * next track after the current one emits `ended`, and an ended element reports
+   * itself paused, so there is no outgoing audio left to fade out of and consecutive
+   * tracks play back to back. Fading there means starting the next track before the
+   * current one finishes, which is a decision about what drives playback rather than
+   * a change to this method; it is recorded as open in the specification.
    */
   async loadFromUrl(url: string, autoPlay: boolean): Promise<void> {
     const playing = !this.current.element.paused && this.current.element.currentTime > 0;

@@ -65,6 +65,27 @@ describe('histogram', () => {
     expect(percentileOf(histogram, 0.1)).toBeLessThan(percentileOf(histogram, 0.9));
   });
 
+  it('ranks a value at the top of the range at the top', () => {
+    // The in-bucket position used to be the remainder of the offset from `min`,
+    // which wraps exactly on the upper bound: every sample sitting on `max` landed
+    // in the last bucket and scored 0 within it, so the loudest tracks in a library
+    // came out as its quietest.
+    const histogram = createHistogram(0, 0.5);
+    for (let i = 0; i < 50; i++) addSample(histogram, 0.5);
+    expect(percentileOf(histogram, 0.5)).toBeGreaterThan(0.9);
+  });
+
+  it('is monotonic across a bucket boundary and past the end', () => {
+    const histogram = createHistogram(0, 10);
+    for (let i = 0; i < 100; i++) addSample(histogram, i / 10);
+
+    const samples = [0, 0.05, 5, 9.9, 9.95, 10, 10.5, 1000];
+    const percentiles = samples.map((value) => percentileOf(histogram, value));
+    for (let i = 1; i < percentiles.length; i++) {
+      expect(percentiles[i]).toBeGreaterThanOrEqual((percentiles[i - 1] ?? 0) - 1e-9);
+    }
+  });
+
   it('never leaves 0..1', () => {
     const histogram = createHistogram(-5, 5);
     for (const value of [-10, -5, 0, 5, 10, NaN, Infinity, -Infinity]) addSample(histogram, value);

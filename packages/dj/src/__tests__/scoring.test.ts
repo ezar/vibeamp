@@ -3,6 +3,7 @@ import {
   BPM_TOLERANCE,
   DEFAULT_WEIGHTS,
   bpmCost,
+  keyReliability,
   noveltyCost,
   relativeBpmDistance,
   scoreCandidate,
@@ -143,6 +144,21 @@ describe('noveltyCost', () => {
   });
 });
 
+describe('keyReliability', () => {
+  it('trusts nothing at zero strength, which is what an absent key is stored as', () => {
+    expect(keyReliability(0)).toBe(0);
+  });
+
+  it('takes a confident estimate at face value', () => {
+    expect(keyReliability(0.8)).toBe(1);
+    expect(keyReliability(0.7)).toBe(1);
+  });
+
+  it('fades in between', () => {
+    expect(keyReliability(0.55)).toBeCloseTo(0.5, 6);
+  });
+});
+
 describe('scoreCandidate', () => {
   const current = makeTrack({ id: 'current', bpm: 124, root: 'C', scale: 'major', energy: 0.5 });
 
@@ -168,6 +184,63 @@ describe('scoreCandidate', () => {
     const low = makeTrack({ id: 'low', bpm: 124, energy: 0.2 });
     expect(scoreCandidate(current, high, target, emptyContext())).toBeLessThan(
       scoreCandidate(current, low, target, emptyContext()),
+    );
+  });
+
+  it('does not treat two keyless tracks as a perfect harmonic match', () => {
+    // A track with no tonal evidence is stored as C major with zero strength. Read
+    // literally, two of them share a Camelot code and score a perfect match, which
+    // then beats every track whose key is actually known.
+    const target = { ...NEUTRAL_TARGET };
+    const keyless = makeTrack({ id: 'a', bpm: 124, root: 'C', scale: 'major', keyStrength: 0 });
+    const alsoKeyless = makeTrack({ id: 'b', bpm: 124, root: 'C', scale: 'major', keyStrength: 0 });
+    const known = makeTrack({ id: 'c', bpm: 124, root: 'C', scale: 'major', keyStrength: 0.9 });
+    const confidentSeed = makeTrack({
+      id: 's',
+      bpm: 124,
+      root: 'C',
+      scale: 'major',
+      keyStrength: 0.9,
+    });
+
+    expect(scoreCandidate(keyless, alsoKeyless, target, emptyContext())).toBeGreaterThan(
+      scoreCandidate(confidentSeed, known, target, emptyContext()),
+    );
+  });
+
+  it('does not let an unknown key beat a genuine harmonic match', () => {
+    const target = { ...NEUTRAL_TARGET };
+    const seed = makeTrack({ id: 's', bpm: 124, root: 'C', scale: 'major', keyStrength: 0.9 });
+    const sameKey = makeTrack({
+      id: 'same',
+      bpm: 124,
+      root: 'C',
+      scale: 'major',
+      keyStrength: 0.9,
+    });
+    const unknown = makeTrack({ id: 'x', bpm: 124, root: 'C', scale: 'major', keyStrength: 0 });
+
+    expect(scoreCandidate(seed, sameKey, target, emptyContext())).toBeLessThan(
+      scoreCandidate(seed, unknown, target, emptyContext()),
+    );
+  });
+
+  it('still prefers a near key to a clashing one when both are unreliable', () => {
+    // Fading towards neutral must not flatten the term entirely: it says the
+    // estimate is absent, not that every key is equally good.
+    const target = { ...NEUTRAL_TARGET };
+    const seed = makeTrack({ id: 's', bpm: 124, root: 'C', scale: 'major', keyStrength: 0.55 });
+    const near = makeTrack({ id: 'near', bpm: 124, root: 'G', scale: 'major', keyStrength: 0.55 });
+    const clash = makeTrack({
+      id: 'clash',
+      bpm: 124,
+      root: 'F#',
+      scale: 'major',
+      keyStrength: 0.55,
+    });
+
+    expect(scoreCandidate(seed, near, target, emptyContext())).toBeLessThan(
+      scoreCandidate(seed, clash, target, emptyContext()),
     );
   });
 

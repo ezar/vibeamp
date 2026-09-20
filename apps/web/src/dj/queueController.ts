@@ -75,6 +75,16 @@ export class QueueController {
    * Anything already handed over plays out first; everything after it is new.
    */
   async replan(): Promise<void> {
+    await this.buildPlan(this.bridge.queuedTrackIds());
+  }
+
+  /**
+   * Plan the next stretch.
+   *
+   * @param exclude Tracks not to pick, normally what the shell already holds so the
+   *   queue does not repeat itself.
+   */
+  private async buildPlan(exclude: readonly string[]): Promise<void> {
     const settings = this.settings();
     if (!settings.enabled) {
       this.plan = [];
@@ -92,7 +102,7 @@ export class QueueController {
         seed,
         target: settings.target,
         shape: settings.shape,
-        alreadyQueued: this.bridge.queuedTrackIds(),
+        alreadyQueued: exclude,
         length: PLAN_LENGTH,
       })
     ).map((entry) => ({ track: entry.planned.track, file: entry.file }));
@@ -110,11 +120,27 @@ export class QueueController {
     if (handing.length > 0) this.bridge.append(handing);
   }
 
-  /** Start a session from whatever is playing, or from the library if nothing is. */
+  /**
+   * Take the playlist over and start a planned session.
+   *
+   * Switching the auto-DJ on **replaces** the playlist. Until then the shell holds
+   * whatever the scan put there, which for a freshly connected folder is the whole
+   * library, and Webamp offers no way to trim a playlist's tail — so a planned
+   * queue appended to it would not be heard for hours.
+   *
+   * Two consequences, both deliberate. The planning here must not exclude what the
+   * shell currently holds: on a first scan that is every candidate there is, and
+   * excluding them plans nothing and the takeover never happens. And replacing the
+   * playlist restarts playback from the first planned track, because
+   * `setTracksToPlay` is the only way to replace it. That is a direct answer to the
+   * user pressing a button, not something a slider does: re-planning afterwards
+   * still never touches what is playing.
+   */
   async start(): Promise<boolean> {
-    await this.replan();
+    await this.buildPlan([]);
     if (this.plan.length === 0) return false;
-    await this.topUp(null);
+
+    this.bridge.replaceAll(this.plan.splice(0, SHELL_LOOKAHEAD));
     return true;
   }
 

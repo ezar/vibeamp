@@ -15,6 +15,7 @@ export interface TrackSpec {
   artist?: string | null;
   album?: string | null;
   bpmConfidence?: number;
+  keyStrength?: number;
   status?: Track['status'];
   analysed?: boolean;
 }
@@ -28,7 +29,7 @@ export function makeTrack(spec: TrackSpec): Track {
     key: {
       root,
       scale,
-      strength: 0.8,
+      strength: spec.keyStrength ?? 0.8,
       margin: 0.3,
       camelot: toCamelot(root, scale),
     },

@@ -500,20 +500,21 @@ installed once as a PWA and then run offline, and worth measuring against
 Version 1 is finished when all of the following hold. The state of each is recorded
 honestly.
 
-| #   | Criterion                                                           | State                      |
-| --- | ------------------------------------------------------------------- | -------------------------- |
-| 1   | A 1,000 track folder listed in under 30 s                           | Needs a real library       |
-| 2   | Play, pause, seek and skip with no audible clicks                   | Needs listening            |
-| 3   | Moving an equaliser band is audible at once, with no artefacts      | Ramped, needs listening    |
-| 4   | Analysis resumes exactly where it stopped after a reload            | **Covered by tests**       |
-| 5   | A renamed file is not re-analysed                                   | **Covered by tests**       |
-| 6   | Auto-DJ returns 20 tracks from 20,000 in under 100 ms               | **Covered by tests**       |
-| 7   | Consecutive tempos within 10 per cent in 80 per cent of transitions | **Covered by tests**       |
-| 8   | The energy slider audibly reorders the queue                        | **Covered by tests**       |
-| 9   | The visualiser stops when the tab is hidden                         | Webamp's, needs profiling  |
-| 10  | Analysing 1,000 tracks does not grow the heap monotonically         | Needs a real library       |
-| 11  | Works in Firefox through the fallback picker                        | Implemented, needs Firefox |
-| 12  | Installed as a PWA, starts with no network                          | Built, needs verifying     |
+| #   | Criterion                                                           | State                                            |
+| --- | ------------------------------------------------------------------- | ------------------------------------------------ |
+| 1   | A 1,000 track folder listed in under 30 s                           | Needs a real library                             |
+| 2   | Play, pause, seek and skip with no audible clicks                   | Needs listening                                  |
+| 2b  | Crossfade between consecutive tracks                                | **Not met**: manual skips only, see "Still open" |
+| 3   | Moving an equaliser band is audible at once, with no artefacts      | Ramped, needs listening                          |
+| 4   | Analysis resumes exactly where it stopped after a reload            | **Covered by tests**                             |
+| 5   | A renamed file is not re-analysed                                   | **Covered by tests**                             |
+| 6   | Auto-DJ returns 20 tracks from 20,000 in under 100 ms               | **Covered by tests**                             |
+| 7   | Consecutive tempos within 10 per cent in 80 per cent of transitions | **Covered by tests**                             |
+| 8   | The energy slider audibly reorders the queue                        | **Covered by tests**                             |
+| 9   | The visualiser stops when the tab is hidden                         | Webamp's, needs profiling                        |
+| 10  | Analysing 1,000 tracks does not grow the heap monotonically         | Needs a real library                             |
+| 11  | Works in Firefox through the fallback picker                        | Implemented, needs Firefox                       |
+| 12  | Installed as a PWA, starts with no network                          | Built, needs verifying                           |
 
 ### Build order
 

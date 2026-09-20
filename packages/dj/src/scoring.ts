@@ -30,6 +30,11 @@ export const DEFAULT_WEIGHTS: ScoreWeights = {
 /** Relative BPM difference treated as a full mismatch. */
 export const BPM_TOLERANCE = 0.08;
 
+/** Key strength at or below which an estimate carries no information. */
+export const KEY_STRENGTH_FLOOR = 0.4;
+/** Key strength at or above which an estimate is taken at face value. */
+export const KEY_STRENGTH_CEILING = 0.7;
+
 export interface QueueContext {
   /** Artists of the last few tracks played or queued. */
   recentArtists: readonly string[];
@@ -131,7 +136,16 @@ export function scoreCandidate(
   const tempoConfidence = Math.min(from.bpmConfidence, to.bpmConfidence);
   const tempoCost = tempo * tempoConfidence + 0.5 * (1 - tempoConfidence);
 
-  const keyCost = camelotDistance(from.key.camelot, to.key.camelot);
+  // A track with no tonal evidence is stored as C major with zero strength, so two
+  // atonal or percussive tracks would otherwise read as a perfect harmonic match
+  // and beat every track whose key is actually known. Fading towards neutral is
+  // right for the same reason it is for tempo: the estimate is absent, not bad.
+  const keyConfidence = Math.min(
+    keyReliability(from.key.strength),
+    keyReliability(to.key.strength),
+  );
+  const keyCost =
+    camelotDistance(from.key.camelot, to.key.camelot) * keyConfidence + 0.5 * (1 - keyConfidence);
   const energyCost = Math.abs(to.energy - target.energy);
   const timbreCost =
     0.6 * Math.abs(to.brightness - target.brightness) +
@@ -167,6 +181,17 @@ export function noveltyCost(
   // asks for is the cost.
   cost += Math.abs(context.playFrequency(candidate.id) - clamp01(target.familiarity));
   return cost;
+}
+
+/**
+ * How much to trust a key estimate, 0..1.
+ *
+ * Correlation against a key profile runs around 0.75 upwards for tonal music with a
+ * clear centre, and below 0.5 for something percussive, atonal or too short to have
+ * a key. The band between is where an estimate stops meaning anything.
+ */
+export function keyReliability(strength: number): number {
+  return clamp01((strength - KEY_STRENGTH_FLOOR) / (KEY_STRENGTH_CEILING - KEY_STRENGTH_FLOOR));
 }
 
 function clamp01(value: number): number {

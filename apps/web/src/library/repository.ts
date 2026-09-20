@@ -198,6 +198,19 @@ export class LibraryRepository {
     return this.db.tracks.get(id);
   }
 
+  /**
+   * Read several records by id, in the order asked for, skipping any that are not
+   * there.
+   *
+   * Status-blind on purpose. Rebuilding the playlist after a scan needs every
+   * track the scan found, and a folder that was analysed on a previous visit
+   * contains no pending ones at all.
+   */
+  async getMany(ids: readonly string[]): Promise<Track[]> {
+    const found = await this.db.tracks.bulkGet([...ids]);
+    return found.filter((track): track is Track => track !== undefined);
+  }
+
   // ---- play history ----
 
   async recordPlay(trackId: string, playedSec: number): Promise<void> {
