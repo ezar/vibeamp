@@ -1,0 +1,31 @@
+/* A single line at the bottom of the page, out of the shell's way. */
+
+.offline-notice {
+  position: absolute;
+  z-index: 25;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-family: Tahoma, 'MS Sans Serif', Geneva, sans-serif;
+  font-size: 10px;
+  color: #c8c8d4;
+  background: #2f2f3a;
+  border-top: 1px solid #5a5a6a;
+  border-left: 1px solid #5a5a6a;
+  border-right: 1px solid #16161c;
+  border-bottom: 1px solid #16161c;
+}
+
+.offline-notice button {
+  font: inherit;
+  color: #c8c8d4;
+  background: #3a3a48;
+  border-top: 1px solid #5a5a6a;
+  border-left: 1px solid #5a5a6a;
+  border-right: 1px solid #16161c;
+  border-bottom: 1px solid #16161c;
+  padding: 2px 8px;
+}

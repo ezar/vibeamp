@@ -1,0 +1,68 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# vibeamp is a project page, so it is served from a subdirectory. The base path
+# comes from the Pages configuration rather than being hard-coded, which keeps
+# forks and custom domains working.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/configure-pages@v5
+        id: pages
+
+      - name: Resolve the base path
+        run: |
+          # Vite needs a base that both starts and ends with a slash. The Pages
+          # configuration gives "/vibeamp" for a project page and nothing at all
+          # for a custom domain served from the root.
+          BASE='${{ steps.pages.outputs.base_path }}'
+          [ -z "$BASE" ] && BASE='/'
+          case "$BASE" in
+            */) ;;
+            *) BASE="$BASE/" ;;
+          esac
+          echo "BASE_PATH=$BASE" >> "$GITHUB_ENV"
+          echo "Building for $BASE"
+
+      - run: pnpm install --frozen-lockfile
+
+      # Typechecks, then builds. The base reaches the asset URLs, the web app
+      # manifest's start_url and scope, and the service worker's registration.
+      - run: pnpm --filter @vibeamp/web build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

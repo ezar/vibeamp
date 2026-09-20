@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The version comes from "packageManager" in package.json; setting it here
+      # too makes the action fail rather than pick one.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Format, lint, typecheck and unit tests
+        run: pnpm verify
+
+      - name: Build the app
+        run: pnpm --filter @vibeamp/web exec vite build
+
+      - name: Install the browser for the end to end tests
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The seam with Webamp only exists on a real page: the shell mounting itself
+      # at the end of <body>, our windows landing where it is not, and our shortcuts
+      # not colliding with Winamp's. None of that fails to compile.
+      - name: End to end tests
+        run: pnpm test:e2e
+
+      # GitHub Pages serves the app from a subdirectory, which is exactly where
+      # absolute asset paths break. Building and running the suite against that
+      # layout catches it on the pull request rather than on the deployment.
+      - name: Build and test the GitHub Pages layout
+        env:
+          BASE_PATH: /vibeamp/
+        run: pnpm test:e2e

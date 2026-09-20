@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": [],
+    // Every index in this package is derived from a typed array's own `length`
+    // inside a counted loop, so `noUncheckedIndexedAccess` cannot find a real
+    // bug here and would put a `!` on several hundred arithmetic expressions.
+    // It stays on everywhere else, where the lookups are maps and records.
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/**/*.ts"]
+}
