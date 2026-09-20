@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # The version comes from "packageManager" in package.json; setting it here
+      # too makes the action fail rather than pick one.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Format, lint, typecheck and unit tests
+        run: pnpm verify
+
+      - name: Build the app
+        run: pnpm --filter @vibeamp/web exec vite build

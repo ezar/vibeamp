@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/dsp" },
+    { "path": "./packages/core" },
+    { "path": "./packages/analysis" },
+    { "path": "./packages/dj" },
+    { "path": "./apps/web" }
+  ]
+}
