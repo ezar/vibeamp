@@ -86,6 +86,11 @@ export interface VibePanelProps {
   upcoming: readonly UpcomingTrack[];
   /** Set every slider and the curve at once. */
   onApplyPreset: (preset: VibePreset) => void;
+  /**
+   * A phone-sized viewport: the panel is a column under the shell rather than a
+   * window beside it, and dragging it would fight the page scroll.
+   */
+  narrow: boolean;
   /** Result of the last export or import, shown for a moment. */
   libraryNotice: string | null;
 }
@@ -120,10 +125,11 @@ export function VibePanel({
   nowPlaying,
   upcoming,
   onApplyPreset,
+  narrow,
   libraryNotice,
 }: VibePanelProps): React.JSX.Element {
   const ready = analysedCount >= MIN_ANALYSED_TRACKS;
-  const { position, handleProps } = useDraggable(initialPosition);
+  const { position, handleProps } = useDraggable(initialPosition, { enabled: !narrow });
   const queue = upcoming.slice(0, QUEUE_PREVIEW);
   // Only the imminent move is explained. The ones after it are planned from a
   // target the listener is still moving, so describing them would be a promise the
@@ -144,7 +150,9 @@ export function VibePanel({
       className="vibe-window"
       role="group"
       aria-label="Vibe"
-      style={{ left: position.x, top: position.y }}
+      // On a phone this is a block in the page, placed by the stylesheet; setting
+      // a left and a top here would be a position nothing reads.
+      style={narrow ? undefined : { left: position.x, top: position.y }}
     >
       <div className="vibe-titlebar" {...handleProps}>
         <span>VIBEAMP</span>

@@ -403,3 +403,108 @@
 .vibe-row--presets .vibe-button {
   padding: 3px 6px;
 }
+
+/* ---- the phone layout ---- */
+
+/*
+ * On a phone the panel is not a window beside the shell: it is the page under it.
+ * Full width, no dragging — the title bar would fight the scroll for the same
+ * gesture — and every control grown to something a thumb can actually hit. The
+ * Winamp bevels stay; this is the same instrument, not a different app.
+ *
+ * The breakpoint matches `NARROW_MAX_WIDTH` in `webamp/layout.ts`.
+ */
+@media (max-width: 700px) {
+  /*
+   * A block in the page rather than a floating window. Absolute positioning would
+   * mean measuring the shell, and then measuring the panel again to give the page
+   * something to scroll to; flow does both by itself, and the panel grows when the
+   * queue appears without anything having to notice.
+   */
+  .vibe-window {
+    position: static;
+    margin: 12px auto 24px;
+    font-size: 11px;
+  }
+
+  .vibe-titlebar {
+    padding: 7px 8px;
+    font-size: 11px;
+    cursor: default;
+  }
+
+  .vibe-body {
+    padding: 12px;
+  }
+
+  .vibe-hero .vibe-button--primary {
+    padding: 14px 8px;
+    font-size: 13px;
+  }
+
+  .vibe-hero p {
+    font-size: 11px;
+  }
+
+  /* Faders long enough to be worth dragging with a thumb. */
+  .vibe-slider input[type='range'] {
+    width: 34px;
+    height: 118px;
+  }
+
+  .vibe-slider input[type='range']::-webkit-slider-thumb {
+    width: 27px;
+    height: 15px;
+    margin-left: -14px;
+  }
+
+  .vibe-slider input[type='range']::-moz-range-thumb {
+    width: 27px;
+    height: 15px;
+  }
+
+  .vibe-slider label,
+  .vibe-row label {
+    font-size: 10px;
+  }
+
+  .vibe-button,
+  .vibe-row select {
+    font-size: 10px;
+    /* Apple's own floor for a touch target, and about the width of a fingertip. */
+    min-height: 32px;
+    padding: 6px 10px;
+  }
+
+  .vibe-actions .vibe-button,
+  .vibe-row--presets .vibe-button {
+    padding: 6px 10px;
+  }
+
+  .vibe-actions .vibe-button:active:not(:disabled),
+  .vibe-button:active:not(:disabled) {
+    padding: 7px 9px 5px 11px;
+  }
+
+  /* Wide enough for "12s" plus the arrow at this font size. */
+  .vibe-row .vibe-select--narrow {
+    width: 84px;
+  }
+
+  .vibe-row .vibe-button--autodj {
+    padding: 6px 18px;
+  }
+
+  .vibe-queue li {
+    font-size: 11px;
+    line-height: 1.8;
+  }
+
+  .vibe-queue-head {
+    font-size: 10px;
+  }
+
+  .vibe-status {
+    font-size: 11px;
+  }
+}

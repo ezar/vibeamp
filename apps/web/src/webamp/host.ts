@@ -49,6 +49,8 @@ export interface HostOptions {
   onSavePlaylist?: (tracks: readonly WebampTrackType[]) => Promise<void>;
   /** Called when the user asks to add a URL, which this player has no use for. */
   onAddUrl?: () => void;
+  /** A phone-sized viewport, which opens fewer windows. */
+  narrow?: boolean;
   /**
    * Called when the user picks a menu entry the shell has no handler hook for.
    *
@@ -107,7 +109,7 @@ export async function createHost(options: HostOptions): Promise<WebampHost> {
     enableMediaSession: true,
     // Without a layout of its own, Webamp opens MilkDrop over the main window and
     // buries the transport under the visualiser.
-    windowLayout: shellLayout(),
+    windowLayout: shellLayout(options.narrow ?? false),
     // Webamp mounts itself at the end of <body> rather than inside the node it is
     // given, so the vibe window's place in the stack has to be settled explicitly.
     zIndex: 10,

@@ -112,6 +112,33 @@ not viewport coordinates — so the vibe window, which is not Webamp's, cannot b
 placed the same way. It is positioned against the main window's measured rectangle
 once the shell has rendered.
 
+### On a phone
+
+Below 700px there is no room for two columns, and the desktop arrangement put the
+vibe panel on top of the main window: the transport, the title and the seek bar were
+all behind it, and the page could not scroll to what was underneath. The app was not
+merely cramped there, it was unusable.
+
+The phone layout is one column. The shell opens with the player and the playlist
+only — ten equaliser bands at 275px is a row of targets nobody can hit, and it costs
+a third of the screen before the player has said what is playing; it is still one
+tap away in the shell's own menu. The panel follows as an ordinary block under the
+shell, centred on it so the two read as one column rather than two applications that
+happened to load together.
+
+Two things are deliberately **not** done. The panel is not stretched to the gutters:
+Webamp's windows are a fixed 275px whatever the screen, and a full-width panel under
+a narrow player looks like a mistake. And the shell is not scaled up to fill the
+width, which would look better but breaks Webamp's own drag arithmetic, since it
+reads pointer coordinates that a CSS transform does not correct.
+
+Placement on a phone belongs to the stylesheet rather than to a measurement. Flow
+puts the panel under the shell and grows the page to hold it; doing it in JavaScript
+would mean measuring the shell, then measuring the panel again to give the page
+something to scroll to, and watching both for changes. The breakpoint is therefore
+carried in three places — `NARROW_MAX_WIDTH`, `app.css` and `vibe.css` — with a test
+asserting the constant rather than trusting the three to stay in step.
+
 The shell subscribes to six events — `timeupdate`, `ended`, `playing`, `waiting`,
 `stopWaiting`, `fileLoaded` — and drives the engine through its `IMedia` interface.
 Both were read off the published bundle, not guessed.
@@ -525,12 +552,12 @@ always starts behind a connect button rather than reading files on load. The ind
 and the descriptors are available without permission, so the library can be browsed
 and a queue planned before anything can be played.
 
-| Browser              | Support                                                                                                                                                                     |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Chrome, Edge desktop | Full. The target platform.                                                                                                                                                  |
-| Firefox              | No File System Access. Falls back to `<input webkitdirectory>`; the folder is re-picked each session, and cached analysis still applies because identity is a content hash. |
-| Safari desktop       | The same fallback.                                                                                                                                                          |
-| iOS                  | No File System Access, and serious limits on background audio. It works as a player for a one-off selection, not as a library. Documented, not disguised.                   |
+| Browser              | Support                                                                                                                                                                                                                    |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Chrome, Edge desktop | Full. The target platform.                                                                                                                                                                                                 |
+| Firefox              | No File System Access. Falls back to `<input webkitdirectory>`; the folder is re-picked each session, and cached analysis still applies because identity is a content hash.                                                |
+| Safari desktop       | The same fallback.                                                                                                                                                                                                         |
+| iOS                  | No File System Access, and serious limits on background audio. It works as a player for a one-off selection, not as a library. The layout is built and tested for a phone; iOS's own limits are documented, not disguised. |
 
 ### Storage
 

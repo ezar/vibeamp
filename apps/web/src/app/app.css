@@ -37,12 +37,42 @@ body {
 }
 
 /*
- * Below the width the three windows need, the shell is unusable as a set of draggable
- * windows. The specification calls for a stacked layout there; until that exists the
- * app says so rather than presenting something broken.
+ * The phone layout: one column, scrolled.
+ *
+ * Webamp centres its windows inside the node it was rendered into, so the way to
+ * put the shell at the top of a phone screen is to give that node the height the
+ * shell needs and nothing more. The vibe panel is then placed under it.
+ *
+ * The breakpoint matches `NARROW_MAX_WIDTH` in `webamp/layout.ts` and the one in
+ * `vibe.css`. A stylesheet cannot import a constant, so the three are kept in step
+ * by hand and an end-to-end test measures the result.
  */
-@media (max-width: 640px) {
+@media (max-width: 700px) {
+  html,
+  body {
+    height: auto;
+    /* The desktop layout fits on one screen. This one does not, and the panel it
+       scrolls to is the half of the app that does the interesting part. */
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .app {
+    height: auto;
+    min-height: 100vh;
+    /* Room under the panel for the offline notice, which is fixed to the bottom. */
+    padding-bottom: 48px;
+  }
+
+  /* Two stacked windows and the eight pixels Webamp leaves around them. */
   .app-shell {
-    overflow: auto;
+    height: 248px;
+  }
+
+  .app-loading,
+  .app-error {
+    position: static;
+    margin: 12px;
+    max-width: none;
   }
 }

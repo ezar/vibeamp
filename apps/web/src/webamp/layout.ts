@@ -28,6 +28,19 @@ export const VIBE_GAP = 14;
 const EDGE = 8;
 
 /**
+ * The widest viewport that gets the phone layout, in CSS pixels.
+ *
+ * Two 275px windows side by side plus the vibe panel need about 850px. Below this
+ * the windows cannot sit beside each other at all, so the layout becomes a single
+ * column and the panel goes under the shell instead of next to it.
+ *
+ * `vibe.css` and `app.css` carry the same number in a media query. There is no way
+ * to share a constant with a stylesheet, so the two are kept in step by hand and
+ * an end-to-end test measures the result rather than trusting either.
+ */
+export const NARROW_MAX_WIDTH = 700;
+
+/**
  * Rows of extra height given to MilkDrop, in Winamp's own resize units.
  *
  * A row is 29px, so eight of them take the window to 116 + 232 = 348: exactly the
@@ -38,8 +51,26 @@ const MILKDROP_EXTRA_HEIGHT = 8;
 /**
  * The arrangement: the three classic windows stacked, MilkDrop docked against the
  * stack's right edge the way Winamp's own windows snap together.
+ *
+ * @param narrow A phone-sized viewport. The equaliser starts closed there: ten
+ *   bands at 275px is a row of 8px targets nobody can hit, and it costs a third of
+ *   the screen before the player has said what is playing. It is still one tap
+ *   away in the shell's own menu.
  */
-export function shellLayout(): NonNullable<Options['windowLayout']> {
+export function shellLayout(narrow = false): NonNullable<Options['windowLayout']> {
+  if (narrow) {
+    return {
+      main: { position: { top: 0, left: 0 } },
+      equalizer: { position: { top: WINDOW_HEIGHT, left: 0 }, closed: true },
+      playlist: { position: { top: WINDOW_HEIGHT, left: 0 } },
+      milkdrop: {
+        position: { top: WINDOW_HEIGHT * 2, left: 0 },
+        size: { extraWidth: 0, extraHeight: 4 },
+        closed: true,
+      },
+    };
+  }
+
   return {
     main: { position: { top: 0, left: 0 } },
     equalizer: { position: { top: WINDOW_HEIGHT, left: 0 } },
@@ -54,7 +85,11 @@ export function shellLayout(): NonNullable<Options['windowLayout']> {
 }
 
 /**
- * Where the vibe window opens: left of the shell, tops aligned.
+ * Where the vibe window opens on a desktop: left of the shell, tops aligned.
+ *
+ * Only the desktop needs this. On a phone the panel is an ordinary block under the
+ * shell and the stylesheet places it, which is why there is no `narrow` here: a
+ * position computed and then ignored is worse than no position at all.
  *
  * @param main The main window's rectangle, as rendered. Null before the shell exists.
  * @returns Viewport coordinates, falling back to the top left corner when the shell

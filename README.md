@@ -49,6 +49,9 @@ relative · energy +12`. Where it is not sure of a key it says so instead of
 - **Lets you take your library with you.** Export the whole index, descriptors
   included, as one JSON file. Import it on another machine and nothing is analysed
   twice: tracks are matched by what is in them, not by where they are.
+- **Works on a phone.** One column: the player and the playlist, then the vibe
+  panel under them with controls sized for a thumb. The equaliser starts closed
+  and is one tap away.
 - **Is honest about what it knows.** Below 30 analysed tracks the auto-DJ turns
   itself off and says why, because a recommender with too little to go on produces
   queues that are obviously wrong. Descriptors measured before the library was big

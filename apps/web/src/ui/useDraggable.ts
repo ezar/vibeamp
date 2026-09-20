@@ -17,13 +17,33 @@ export interface Draggable {
   position: Position;
   /** Spread onto the element that starts the drag, usually the title bar. */
   handleProps: {
-    onPointerDown: (event: React.PointerEvent) => void;
+    onPointerDown?: (event: React.PointerEvent) => void;
   };
 }
 
-export function useDraggable(initial: Position): Draggable {
+export interface DraggableOptions {
+  /**
+   * Whether the window can be dragged at all.
+   *
+   * Off on a phone, where the layout places the panel in a column and a drag on
+   * the title bar would fight the page scroll for the same gesture.
+   */
+  enabled?: boolean;
+}
+
+export function useDraggable(initial: Position, options: DraggableOptions = {}): Draggable {
+  const enabled = options.enabled ?? true;
   const [position, setPosition] = useState(initial);
+  const placed = useRef(initial);
   const origin = useRef<{ pointer: Position; start: Position } | null>(null);
+
+  // A new starting point means the layout moved: a resize, a rotation, or the
+  // switch between the phone column and the desktop arrangement. Wherever the
+  // window had been dragged to no longer refers to anything, so it goes back.
+  if (placed.current.x !== initial.x || placed.current.y !== initial.y) {
+    placed.current = initial;
+    setPosition(initial);
+  }
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent) => {
@@ -62,7 +82,7 @@ export function useDraggable(initial: Position): Draggable {
     [position],
   );
 
-  return { position, handleProps: { onPointerDown } };
+  return { position, handleProps: enabled ? { onPointerDown } : {} };
 }
 
 function clamp(value: number, min: number, max: number): number {
