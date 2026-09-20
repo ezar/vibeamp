@@ -1,130 +1,303 @@
 /*
  * The vibe window.
  *
- * Styled to sit beside Webamp's windows rather than inside them: Webamp owns its own
- * DOM and its equaliser window has no slot for another tab, so the sliders live in a
- * window of their own that matches the shell. See
- * docs/decisions/0003-the-vibe-window-is-its-own-window.md.
+ * Drawn in the Winamp idiom rather than left as browser controls: sunken grooves,
+ * bevelled handles, the green display type. It is a separate window beside the
+ * shell rather than a tab inside the equaliser, because Webamp owns its own DOM —
+ * see docs/decisions/0003-the-vibe-window-is-its-own-window.md.
+ *
+ * It does not follow a loaded `.wsz`. Webamp does not expose the skin it parsed, so
+ * matching one would mean parsing the archive a second time ourselves; these are
+ * the classic skin's colours, which sit close to most of them.
  */
+
+:root {
+  --vibe-face: #3a3a48;
+  --vibe-face-dark: #2b2b36;
+  --vibe-well: #16161c;
+  --vibe-light: #6c6c80;
+  --vibe-shadow: #16161c;
+  --vibe-text: #c8c8d4;
+  --vibe-display: #00ff00;
+  --vibe-display-dim: #1d9f1d;
+  --vibe-warning: #ffcc44;
+}
 
 .vibe-window {
   position: absolute;
-  /* Above the shell, which Webamp mounts at the end of <body> with its own
-     stacking context. Without this the panel sits underneath it. */
   z-index: 20;
-  top: 16px;
-  left: 16px;
   width: 275px;
   font-family: Tahoma, 'MS Sans Serif', Geneva, sans-serif;
   font-size: 9px;
-  color: #00ff00;
-  background: #2f2f3a;
-  border-top: 1px solid #5a5a6a;
-  border-left: 1px solid #5a5a6a;
-  border-right: 1px solid #16161c;
-  border-bottom: 1px solid #16161c;
+  color: var(--vibe-text);
+  background: var(--vibe-face);
+  border-top: 1px solid var(--vibe-light);
+  border-left: 1px solid var(--vibe-light);
+  border-right: 1px solid var(--vibe-shadow);
+  border-bottom: 1px solid var(--vibe-shadow);
   user-select: none;
 }
 
+/* ---- title bar ---- */
+
 .vibe-titlebar {
-  touch-action: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   height: 14px;
-  padding: 0 4px;
-  background: linear-gradient(#4a4a5c, #32323e);
-  color: #c8c8d4;
-  letter-spacing: 1px;
+  padding: 0 5px;
+  touch-action: none;
   cursor: move;
+  background: linear-gradient(#54546a, #34344a);
+  color: #d8d8e4;
+  font-size: 8px;
+  letter-spacing: 2px;
+}
+
+.vibe-count {
+  color: var(--vibe-display-dim);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
 }
 
 .vibe-body {
   padding: 8px;
 }
 
+/* ---- the hero action, shown until a folder is connected ---- */
+
+.vibe-hero {
+  margin-bottom: 10px;
+  padding: 7px;
+  background: var(--vibe-face-dark);
+  border-top: 1px solid var(--vibe-shadow);
+  border-left: 1px solid var(--vibe-shadow);
+  border-right: 1px solid var(--vibe-light);
+  border-bottom: 1px solid var(--vibe-light);
+  text-align: center;
+}
+
+.vibe-hero p {
+  margin: 6px 0 0;
+  color: var(--vibe-display-dim);
+  line-height: 1.5;
+}
+
+/* ---- sliders ---- */
+
 .vibe-sliders {
   display: flex;
   justify-content: space-between;
-  gap: 4px;
+  gap: 2px;
 }
 
 .vibe-slider {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   flex: 1;
 }
 
 /*
- * Vertical range inputs. `writing-mode: vertical-lr` with `direction: rtl` is the
- * modern way; the WebKit appearance is kept as a fallback for older Safari.
+ * A vertical range drawn as a Winamp fader: a narrow sunken groove with a wide
+ * bevelled handle. `appearance: none` is what lets the track and thumb be styled
+ * at all, and the vertical writing mode is what makes the input vertical without
+ * a rotate transform, which would take the hit area with it.
  */
 .vibe-slider input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
   writing-mode: vertical-lr;
   direction: rtl;
-  -webkit-appearance: slider-vertical;
-  width: 16px;
-  height: 62px;
-  accent-color: #00ff00;
+  width: 14px;
+  height: 64px;
+  margin: 0;
+  background: transparent;
+  cursor: ns-resize;
+}
+
+.vibe-slider input[type='range']::-webkit-slider-runnable-track {
+  width: 5px;
+  background: var(--vibe-well);
+  border-top: 1px solid var(--vibe-shadow);
+  border-left: 1px solid var(--vibe-shadow);
+  border-right: 1px solid var(--vibe-light);
+  border-bottom: 1px solid var(--vibe-light);
+}
+
+.vibe-slider input[type='range']::-moz-range-track {
+  width: 5px;
+  background: var(--vibe-well);
+  border: 1px solid var(--vibe-shadow);
+}
+
+.vibe-slider input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 7px;
+  /* Centres the wide handle on the narrow groove. In a vertical writing mode this
+     margin is the cross-axis offset, so it accounts for the track's border too. */
+  margin-left: -7px;
+  background: linear-gradient(#5e5e74, #3c3c4c);
+  border-top: 1px solid #8a8aa0;
+  border-left: 1px solid #8a8aa0;
+  border-right: 1px solid var(--vibe-shadow);
+  border-bottom: 1px solid var(--vibe-shadow);
+}
+
+.vibe-slider input[type='range']::-moz-range-thumb {
+  width: 13px;
+  height: 7px;
+  border-radius: 0;
+  background: linear-gradient(#5e5e74, #3c3c4c);
+  border-top: 1px solid #8a8aa0;
+  border-left: 1px solid #8a8aa0;
+  border-right: 1px solid var(--vibe-shadow);
+  border-bottom: 1px solid var(--vibe-shadow);
+}
+
+.vibe-slider input[type='range']:focus-visible {
+  outline: 1px dotted var(--vibe-display);
+  outline-offset: 2px;
+}
+
+.vibe-slider input[type='range']:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .vibe-slider label {
-  color: #8ce68c;
-  text-transform: lowercase;
+  color: var(--vibe-display);
   text-align: center;
-  line-height: 1.2;
+  font-size: 8px;
+  letter-spacing: 0.5px;
 }
 
-.vibe-readout {
-  color: #c8c8d4;
-  font-variant-numeric: tabular-nums;
+.vibe-slider input[type='range']:disabled + label {
+  color: #5c7c5c;
 }
+
+/* ---- rows of controls ---- */
 
 .vibe-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 5px;
+  margin-top: 9px;
 }
 
-.vibe-row select,
-.vibe-row button {
+.vibe-row--secondary {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--vibe-shadow);
+  box-shadow: inset 0 1px 0 var(--vibe-light);
+}
+
+.vibe-row label {
+  color: var(--vibe-display);
+  font-size: 8px;
+  letter-spacing: 0.5px;
+}
+
+.vibe-button,
+.vibe-row select {
   font-family: inherit;
-  font-size: 9px;
-  color: #c8c8d4;
-  background: #3a3a48;
-  border-top: 1px solid #5a5a6a;
-  border-left: 1px solid #5a5a6a;
-  border-right: 1px solid #16161c;
-  border-bottom: 1px solid #16161c;
-  padding: 2px 6px;
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  color: var(--vibe-text);
+  background: linear-gradient(var(--vibe-face), var(--vibe-face-dark));
+  border-top: 1px solid var(--vibe-light);
+  border-left: 1px solid var(--vibe-light);
+  border-right: 1px solid var(--vibe-shadow);
+  border-bottom: 1px solid var(--vibe-shadow);
+  padding: 3px 7px;
+  cursor: pointer;
 }
 
-.vibe-row button:disabled {
-  color: #6a6a78;
+/*
+ * The curve is a setting; the auto-DJ is the control. Letting the select take the
+ * whole row pushed the thing people came for to the edge, so the select is sized to
+ * its content and the button is what the eye lands on.
+ */
+.vibe-row select {
+  flex: 0 1 auto;
+  min-width: 0;
+  width: 84px;
 }
+
+.vibe-row .vibe-button--autodj {
+  margin-left: auto;
+  padding: 3px 12px;
+}
+
+.vibe-button:hover:not(:disabled),
+.vibe-row select:hover {
+  background: linear-gradient(#45455a, #33333f);
+}
+
+/* Pressed: the bevel inverts, which is the whole visual language of the original. */
+.vibe-button:active:not(:disabled) {
+  background: var(--vibe-face-dark);
+  border-top-color: var(--vibe-shadow);
+  border-left-color: var(--vibe-shadow);
+  border-right-color: var(--vibe-light);
+  border-bottom-color: var(--vibe-light);
+  padding: 4px 6px 2px 8px;
+}
+
+.vibe-button:disabled {
+  color: #6a6a78;
+  cursor: default;
+}
+
+.vibe-button--primary {
+  width: 100%;
+  padding: 5px 8px;
+  color: var(--vibe-display);
+  font-size: 9px;
+  letter-spacing: 1.2px;
+}
+
+.vibe-button--on {
+  color: var(--vibe-display);
+  background: var(--vibe-face-dark);
+  border-top-color: var(--vibe-shadow);
+  border-left-color: var(--vibe-shadow);
+  border-right-color: var(--vibe-light);
+  border-bottom-color: var(--vibe-light);
+}
+
+/* ---- status ---- */
 
 .vibe-status {
   margin-top: 8px;
-  color: #8ce68c;
-  line-height: 1.4;
+  min-height: 0;
+  color: var(--vibe-display-dim);
+  line-height: 1.5;
+}
+
+.vibe-status p {
+  margin: 0;
 }
 
 .vibe-status .vibe-warning {
-  color: #ffcc44;
+  color: var(--vibe-warning);
 }
 
 .vibe-progress {
-  height: 6px;
-  margin-top: 4px;
-  background: #16161c;
-  border: 1px solid #5a5a6a;
+  height: 5px;
+  margin-top: 5px;
+  background: var(--vibe-well);
+  border-top: 1px solid var(--vibe-shadow);
+  border-left: 1px solid var(--vibe-shadow);
+  border-right: 1px solid var(--vibe-light);
+  border-bottom: 1px solid var(--vibe-light);
 }
 
 .vibe-progress span {
   display: block;
   height: 100%;
-  background: #00ff00;
+  background: var(--vibe-display);
 }

@@ -14,23 +14,26 @@ import type { Services } from './services.js';
 export const ROOT_ID = 'root-1';
 
 /**
- * Ask for a folder and index everything in it.
+ * Index a folder, asking for one if none is handed over.
  *
+ * @param source A folder already in hand, from a drop. Omitted, the user is asked.
  * @returns The files found, or `null` when the user dismissed the picker.
  */
 export async function connectFolder(
   services: Services,
   onProgress: (progress: ScanProgress) => void,
+  source?: FolderSource,
 ): Promise<ScannedFile[] | null> {
-  const source = supportsDirectoryHandles() ? await pickDirectory() : await pickWithFileInput();
-  if (source === null) return null;
+  const folder =
+    source ?? (supportsDirectoryHandles() ? await pickDirectory() : await pickWithFileInput());
+  if (folder === null) return null;
 
   const scanned: ScannedFile[] = [];
   const options = { rootId: ROOT_ID, onProgress };
   const files =
-    source.kind === 'handle'
-      ? scanDirectory(source.handle, options)
-      : scanFileList(source.files, options);
+    folder.kind === 'handle'
+      ? scanDirectory(folder.handle, options)
+      : scanFileList(folder.files, options);
 
   for await (const entry of files) {
     scanned.push(entry);
@@ -57,8 +60,9 @@ export async function readTagsInBackground(
   }
 }
 
-type FolderSource =
-  { kind: 'handle'; handle: FileSystemDirectoryHandle } | { kind: 'files'; files: FileList };
+export type FolderSource =
+  | { kind: 'handle'; handle: FileSystemDirectoryHandle }
+  | { kind: 'files'; files: FileList | readonly File[] };
 
 async function pickDirectory(): Promise<FolderSource | null> {
   const picker = (globalThis as { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> })
