@@ -22,6 +22,7 @@ import { PlaylistBridge } from '../webamp/playlist.js';
 import { vibeWindowPosition } from '../webamp/layout.js';
 import { CrossfadeScheduler } from '../audio/CrossfadeScheduler.js';
 import { QueueController } from '../dj/queueController.js';
+import type { PlannedEntry } from '../dj/queueController.js';
 import { AnalysisRunner } from '../analysis/runner.js';
 import { DebugPanel, useDebugPanel } from '../ui/DebugPanel.jsx';
 import { OfflineNotice } from '../ui/OfflineNotice.jsx';
@@ -37,6 +38,7 @@ import {
   promptForExport,
 } from '../library/exchange.js';
 import type { Track } from '@vibeamp/core';
+import type { VibePreset } from '@vibeamp/dj';
 import { defaultWorkerCount } from '../analysis/pool.js';
 import './app.css';
 
@@ -59,6 +61,7 @@ export function App(): React.JSX.Element {
   const [panelPosition, setPanelPosition] = useState({ x: 16, y: 16 });
   const [libraryNotice, setLibraryNotice] = useState<string | null>(null);
   const [playingTrack, setPlayingTrack] = useState<Track | null>(null);
+  const [upcoming, setUpcoming] = useState<readonly PlannedEntry[]>([]);
   const store = useAppStore();
   const debugOpen = useDebugPanel();
 
@@ -123,14 +126,20 @@ export function App(): React.JSX.Element {
       }
 
       const bridge = new PlaylistBridge(host.webamp);
-      const queue = new QueueController(services.autoDj, bridge, services.repository, () => {
-        const state = useAppStore.getState();
-        return {
-          target: state.vibeTarget,
-          shape: state.energyShape,
-          enabled: state.autoDjEnabled,
-        };
-      });
+      const queue = new QueueController(
+        services.autoDj,
+        bridge,
+        services.repository,
+        () => {
+          const state = useAppStore.getState();
+          return {
+            target: state.vibeTarget,
+            shape: state.energyShape,
+            enabled: state.autoDjEnabled,
+          };
+        },
+        (next) => setUpcoming(next),
+      );
 
       // Advancing early is what makes the cross-fade apply to ordinary playback:
       // the shell moves on while there is still audio to fade out of, instead of
@@ -238,10 +247,26 @@ export function App(): React.JSX.Element {
 
   const handleToggleAutoDj = useCallback((enabled: boolean) => {
     useAppStore.getState().setAutoDj(enabled);
+    // Switching it off drops the plan but not what the shell already holds: those
+    // tracks will play whatever happens, and the queue shown says so.
     if (enabled) void runtime.current?.queue.start();
+    else void runtime.current?.queue.replan();
   }, []);
 
   const handleCommit = useCallback(() => {
+    void runtime.current?.queue.replan();
+  }, []);
+
+  /**
+   * Set every slider and the curve at once, and replan.
+   *
+   * A preset is a starting point, not a mode: nothing here is remembered, and the
+   * next slider move is an ordinary move from wherever it left things.
+   */
+  const handleApplyPreset = useCallback((preset: VibePreset) => {
+    const state = useAppStore.getState();
+    state.setVibe(preset.target);
+    state.setEnergyShape(preset.shape);
     void runtime.current?.queue.replan();
   }, []);
 
@@ -409,6 +434,9 @@ export function App(): React.JSX.Element {
           onExport={() => void handleExport()}
           onImport={() => void handleImport()}
           onToggleMilkdrop={() => runtime.current?.host.toggleMilkdrop()}
+          nowPlaying={playingTrack}
+          upcoming={upcoming}
+          onApplyPreset={handleApplyPreset}
           libraryNotice={libraryNotice}
         />
       )}

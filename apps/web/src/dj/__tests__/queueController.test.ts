@@ -125,6 +125,7 @@ let db: VibeampDatabase;
 let repository: LibraryRepository;
 let bridge: FakeBridge;
 let settings: QueueSettings;
+let announced: string[][];
 let counter = 0;
 
 /**
@@ -140,6 +141,9 @@ async function controllerOver(library: readonly Track[]): Promise<QueueControlle
     bridge as unknown as PlaylistBridge,
     repository,
     () => settings,
+    (upcoming) => {
+      announced.push(upcoming.map((entry) => entry.track.id));
+    },
   );
 }
 
@@ -148,6 +152,7 @@ beforeEach(async () => {
   await db.open();
   repository = new LibraryRepository(db);
   bridge = new FakeBridge();
+  announced = [];
   settings = { target: TARGET, shape: 'flat', enabled: true };
 });
 
@@ -265,5 +270,84 @@ describe('replan', () => {
 
     const added = bridge.queued.filter((id) => !held.includes(id));
     for (const id of added) expect(held).not.toContain(id);
+  });
+});
+
+describe('upcoming', () => {
+  it('shows one queue, not the split between the shell and the plan', async () => {
+    // The shell only ever holds a couple of tracks; the rest of the plan is here.
+    // A listener does not care where the boundary is, so neither does this list.
+    const library = Array.from({ length: 50 }, (_, i) => makeTrack(`t${i}`));
+    const controller = await controllerOver(library);
+    await controller.start();
+
+    const upcoming = controller.upcoming();
+    expect(upcoming.length).toBeGreaterThan(SHELL_LOOKAHEAD);
+    expect(upcoming.slice(0, SHELL_LOOKAHEAD).map((entry) => entry.track.id)).toEqual(
+      bridge.queued,
+    );
+  });
+
+  it('carries what the planner thought, not just the track', async () => {
+    const controller = await controllerOver([makeTrack('a'), makeTrack('b'), makeTrack('c')]);
+    await controller.start();
+
+    for (const entry of controller.upcoming()) {
+      expect(Number.isFinite(entry.cost)).toBe(true);
+      expect(entry.targetEnergy).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('drops a track once it starts playing', async () => {
+    const library = Array.from({ length: 20 }, (_, i) => makeTrack(`t${i}`));
+    const controller = await controllerOver(library);
+    await controller.start();
+
+    const first = controller.upcoming()[0]?.track.id ?? null;
+    expect(first).not.toBeNull();
+
+    await controller.onTrackChanged(first);
+    expect(controller.upcoming().map((entry) => entry.track.id)).not.toContain(first);
+  });
+
+  it('keeps what the shell already holds when the sliders move', async () => {
+    // Re-planning must not promise a queue that contradicts what is about to play:
+    // the shell cannot un-queue those tracks, so the list still shows them first.
+    const library = Array.from({ length: 50 }, (_, i) => makeTrack(`t${i}`));
+    const controller = await controllerOver(library);
+    await controller.start();
+    const handed = controller
+      .upcoming()
+      .slice(0, SHELL_LOOKAHEAD)
+      .map((entry) => entry.track.id);
+
+    await controller.replan();
+
+    expect(
+      controller
+        .upcoming()
+        .slice(0, SHELL_LOOKAHEAD)
+        .map((entry) => entry.track.id),
+    ).toEqual(handed);
+  });
+
+  it('is empty while the auto-DJ is off', async () => {
+    settings = { ...settings, enabled: false };
+    const controller = await controllerOver([makeTrack('a')]);
+    await controller.replan();
+
+    expect(controller.upcoming()).toEqual([]);
+  });
+
+  it('announces the queue whenever it changes', async () => {
+    const library = Array.from({ length: 20 }, (_, i) => makeTrack(`t${i}`));
+    const controller = await controllerOver(library);
+
+    await controller.start();
+    expect(announced.length).toBeGreaterThan(0);
+
+    const before = announced.length;
+    await controller.onTrackChanged(controller.upcoming()[0]?.track.id ?? null);
+    expect(announced.length).toBeGreaterThan(before);
   });
 });

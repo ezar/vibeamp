@@ -35,9 +35,29 @@ export interface QueueSettings {
   enabled: boolean;
 }
 
+/**
+ * A planned track, with what the planner thought of it.
+ *
+ * The shell only needs the track and its file. The cost and the energy the curve
+ * asked for at that position are what lets the interface say why the queue looks
+ * the way it does, so they are carried alongside rather than thrown away.
+ */
+export interface PlannedEntry extends QueuedEntry {
+  cost: number;
+  targetEnergy: number;
+}
+
 export class QueueController {
   /** The plan, ours alone. The shell only ever sees its first entries. */
-  private plan: QueuedEntry[] = [];
+  private plan: PlannedEntry[] = [];
+  /**
+   * What has been handed to the shell and not yet played.
+   *
+   * Kept so the interface can show one continuous queue. Re-planning rewrites
+   * {@link plan} and leaves this alone, which is the same rule the shell follows:
+   * whatever was handed over plays out first.
+   */
+  private handed: PlannedEntry[] = [];
   private currentTrackId: string | null = null;
 
   constructor(
@@ -45,7 +65,19 @@ export class QueueController {
     private readonly bridge: PlaylistBridge,
     private readonly repository: LibraryRepository,
     private readonly settings: () => QueueSettings,
+    /** Called whenever what is coming next changes. */
+    private readonly onQueueChanged: (upcoming: readonly PlannedEntry[]) => void = () => {},
   ) {}
+
+  /**
+   * What the listener will hear next, nearest first.
+   *
+   * The first entries are already in the shell's playlist and will play whatever
+   * happens; the rest is the plan and is replaced on every slider move.
+   */
+  upcoming(): readonly PlannedEntry[] {
+    return [...this.handed, ...this.plan];
+  }
 
   /** The track the shell is playing, as far as this controller knows. */
   get playingTrackId(): string | null {
@@ -64,8 +96,10 @@ export class QueueController {
       // Recorded on change rather than on completion: a skip is still a signal about
       // what the listener does not want right now.
       await this.repository.recordPlay(trackId, 0);
+      this.dropPlayed(trackId);
     }
     await this.topUp(url);
+    this.announce();
   }
 
   /**
@@ -76,6 +110,7 @@ export class QueueController {
    */
   async replan(): Promise<void> {
     await this.buildPlan(this.bridge.queuedTrackIds());
+    this.announce();
   }
 
   /**
@@ -105,7 +140,12 @@ export class QueueController {
         alreadyQueued: exclude,
         length: PLAN_LENGTH,
       })
-    ).map((entry) => ({ track: entry.planned.track, file: entry.file }));
+    ).map((entry) => ({
+      track: entry.planned.track,
+      file: entry.file,
+      cost: entry.planned.cost,
+      targetEnergy: entry.planned.targetEnergy,
+    }));
   }
 
   /** Push planned tracks into the shell until it holds {@link SHELL_LOOKAHEAD}. */
@@ -117,7 +157,10 @@ export class QueueController {
 
     if (this.plan.length < needed) await this.replan();
     const handing = this.plan.splice(0, needed);
-    if (handing.length > 0) this.bridge.append(handing);
+    if (handing.length > 0) {
+      this.bridge.append(handing);
+      this.handed.push(...handing);
+    }
   }
 
   /**
@@ -140,8 +183,22 @@ export class QueueController {
     await this.buildPlan([]);
     if (this.plan.length === 0) return false;
 
-    this.bridge.replaceAll(this.plan.splice(0, SHELL_LOOKAHEAD));
+    // The playlist is replaced, so nothing handed over before this survives.
+    this.handed = this.plan.splice(0, SHELL_LOOKAHEAD);
+    this.bridge.replaceAll(this.handed);
+    this.announce();
     return true;
+  }
+
+  /** Forget everything up to and including the track that just started. */
+  private dropPlayed(trackId: string): void {
+    const position = this.handed.findIndex((entry) => entry.track.id === trackId);
+    if (position === -1) return;
+    this.handed.splice(0, position + 1);
+  }
+
+  private announce(): void {
+    this.onQueueChanged(this.upcoming());
   }
 
   /** The seed to plan from: what is playing, or any analysed track to begin with. */

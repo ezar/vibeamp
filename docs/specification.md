@@ -486,6 +486,29 @@ hundred passes over it.
 The playing track is never interrupted. This is the demonstration moment of the
 product: move a slider from 1997 and watch the queue reorder itself.
 
+Four presets — warm, peak, dig, late — set every slider and the curve together,
+because the two only mean something in combination: a high energy target on a
+wind-down curve is not "peak time", it is a contradiction. They are starting
+points, not modes: nothing is remembered and no preset stays selected.
+
+### The queue, and why
+
+The plan is twenty tracks deep and the shell only ever holds two of them, so until
+version 1.1 the recommender was invisible: the queue reordered on a slider move and
+nothing on screen said so. The window now lists the next four, each with the tempo
+and the Camelot code the transition turns on, and one line describing the move about
+to happen — `+6 bpm · 8B→8A relative · energy +12`.
+
+The line is re-derived from the two tracks rather than read off the planner's cost,
+because a single number is not an explanation. Only the imminent transition is
+described: the ones after it were planned from a target the listener is still
+moving, and describing them would be a promise the next slider release breaks.
+
+Where an estimate is not trusted the line says so rather than inventing a relation.
+The key cost is already faded out below `KEY_STRENGTH_FLOOR`, and reporting
+"relative minor" from an estimate the planner ignores would be a lie with a number
+attached.
+
 ### While analysing
 
 The playlist is populated and playable before a single track has been analysed. The
@@ -567,7 +590,7 @@ honestly.
 | 5   | A renamed file is not re-analysed                                   | **Covered by tests**                            |
 | 6   | Auto-DJ returns 20 tracks from 20,000 in under 100 ms               | **Covered by tests**                            |
 | 7   | Consecutive tempos within 10 per cent in 80 per cent of transitions | **Covered by tests**                            |
-| 8   | The energy slider audibly reorders the queue                        | **Covered by tests**                            |
+| 8   | The energy slider audibly reorders the queue                        | **Covered end to end**                          |
 | 9   | The visualiser stops when the tab is hidden                         | Webamp's, needs profiling                       |
 | 10  | Analysing 1,000 tracks does not grow the heap monotonically         | Needs a real library                            |
 | 11  | Works in Firefox through the fallback picker                        | Implemented, needs Firefox                      |

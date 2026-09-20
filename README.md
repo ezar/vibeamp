@@ -31,7 +31,12 @@ per track.
   artist, an album or something you heard an hour ago.
 - **Gives you sliders that do something new.** Five vertical sliders in the Winamp
   idiom — energy, bright, dance, known, cohere — and letting one go reorders what is
-  coming next. The track that is playing is never interrupted.
+  coming next. The track that is playing is never interrupted. Four presets set them
+  all at once when you would rather not fiddle.
+- **Shows you the queue, and why.** The next four tracks with their tempo and
+  Camelot code, and one line for the move about to happen: `+6 bpm · 8B→8A
+relative · energy +12`. Where it is not sure of a key it says so instead of
+  inventing a reason.
 - **Is a real Winamp.** The shell is [Webamp](https://webamp.org): three draggable,
   dockable windows, the ten-band equaliser on Winamp's own frequencies, the spectrum
   analyser, the hotkeys, and any `.wsz` skin you already have. Load one and it is
