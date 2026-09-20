@@ -20,6 +20,7 @@ import Webamp from 'webamp';
 import type { ButterchurnOptions, Options, Track as WebampTrack } from 'webamp';
 import { VibeampMedia } from '../audio/VibeampMedia.js';
 import { shellLayout } from './layout.js';
+import { milkdropPresets } from './presets.js';
 import type { SkinChoice } from '../skin/skins.js';
 import type { Track as WebampTrackType } from 'webamp';
 
@@ -161,16 +162,7 @@ export async function createHost(options: HostOptions): Promise<WebampHost> {
         const module = await import('butterchurn');
         return module.default ?? module;
       },
-      getPresets: async () => {
-        const module = await import('butterchurn-presets/lib/butterchurnPresetsMinimal.min.js');
-        const presets: Record<string, object> =
-          (module as { default?: Record<string, object> }).default ??
-          (module as unknown as Record<string, object>);
-        return Object.entries(presets).map(([name, butterchurnPresetObject]) => ({
-          name,
-          butterchurnPresetObject,
-        }));
-      },
+      getPresets: () => milkdropPresets(),
       butterchurnOpen: false,
     },
     __customMediaClass: CapturedMedia,
