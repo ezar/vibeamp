@@ -27,12 +27,16 @@ test('stacks the shell and the panel in one column', async ({ page }) => {
   expect(playlist).not.toBeNull();
   expect(vibe).not.toBeNull();
 
-  // Top to bottom, in that order, with nothing overlapping anything.
-  expect(playlist!.y).toBeGreaterThanOrEqual(main!.y + main!.height - 1);
-  expect(vibe!.y).toBeGreaterThanOrEqual(playlist!.y + playlist!.height);
+  // Top to bottom, in that order, each docked onto the one above with no gap:
+  // three windows of one instrument, not a player with a card underneath it.
+  expect(playlist!.y).toBeCloseTo(main!.y + main!.height, 0);
+  expect(vibe!.y).toBeCloseTo(playlist!.y + playlist!.height, 0);
 
-  // And centred on each other, so it reads as one column rather than two apps.
-  expect(Math.abs(vibe!.x + vibe!.width / 2 - (main!.x + main!.width / 2))).toBeLessThan(4);
+  // Same width and the same left edge, so the column has one straight side.
+  // Within a pixel, not to the pixel: Webamp rounds its own centring and CSS
+  // margins do not, so on an odd number of spare pixels the two differ by a half.
+  expect(vibe!.width).toBeCloseTo(main!.width, 0);
+  expect(Math.abs(vibe!.x - main!.x)).toBeLessThanOrEqual(1);
 });
 
 test('leaves the equaliser closed, and one tap away', async ({ page }) => {

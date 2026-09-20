@@ -21,11 +21,18 @@
   --vibe-display: #00ff00;
   --vibe-display-dim: #1d9f1d;
   --vibe-warning: #ffcc44;
+  /* The pale gold of the classic skin's title bars, which is the single most
+     recognisable thing about a Winamp window. */
+  --vibe-title-line: #cfc79c;
+  --vibe-title-shade: #6b6448;
 }
 
 .vibe-window {
   position: absolute;
   z-index: 20;
+  /* Exactly as wide as one of Webamp's windows, borders included, so it docks
+     against them without a seam. */
+  box-sizing: border-box;
   width: 275px;
   font-family: Tahoma, 'MS Sans Serif', Geneva, sans-serif;
   font-size: 9px;
@@ -40,18 +47,50 @@
 
 /* ---- title bar ---- */
 
+/*
+ * Winamp's own title bar: the name centred, with a run of horizontal lines filling
+ * the space either side of it. Drawn rather than taken from the skin, because
+ * Webamp does not expose the `.wsz` it parsed — see decision 0003. With the
+ * default skin the two are close enough that this reads as another window in the
+ * stack rather than a card that happened to load underneath it, which is the whole
+ * point; with a loaded skin it is as close as it can get without parsing the
+ * archive twice.
+ */
 .vibe-titlebar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 14px;
-  padding: 0 5px;
+  justify-content: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 4px;
   touch-action: none;
   cursor: move;
   background: linear-gradient(#54546a, #34344a);
   color: #d8d8e4;
   font-size: 8px;
   letter-spacing: 2px;
+}
+
+.vibe-titlebar::before,
+.vibe-titlebar::after {
+  content: '';
+  flex: 1;
+  height: 10px;
+  min-width: 10px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--vibe-title-line) 0 1px,
+    transparent 1px 2px,
+    var(--vibe-title-shade) 2px 3px,
+    transparent 3px 4px
+  );
+}
+
+.vibe-title {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
 }
 
 .vibe-count {
@@ -423,7 +462,9 @@
    */
   .vibe-window {
     position: static;
-    margin: 12px auto 24px;
+    /* Docked against the playlist above it, with no gap: it is the next window in
+       the stack, not a card that loaded underneath. */
+    margin: 0 auto 24px;
     font-size: 11px;
   }
 

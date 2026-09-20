@@ -16,14 +16,20 @@ which means forking it (see decision 0001).
 ## Decision
 
 The sliders live in a window of their own, styled to match the shell and draggable
-by its title bar, positioned beside the three Winamp windows.
+by its title bar, docked edge to edge against the three Winamp windows.
+
+Since it cannot be one of Webamp's windows, it is drawn as closely as possible to
+one: the same 275px width, no gap where it meets the stack, and Winamp's title bar
+with the name centred between two runs of horizontal lines.
 
 ## Consequences
 
 - The gesture survives intact: five vertical sliders in the Winamp idiom, and
   releasing one reorders the queue while the music keeps playing.
 - It is visibly a separate window rather than part of the equaliser. Less elegant
-  than the original idea.
+  than the original idea, and the reason it is worth the effort of looking like one
+  of the shell's own windows: on a phone the layout is a single column, and a panel
+  that does not match reads as a second application below the player.
 - The window is styled by hand rather than skinned, so it does not follow a loaded
   `.wsz`. A skinned version would need the sprite sheet the shell already parsed,
   which Webamp does not expose.
