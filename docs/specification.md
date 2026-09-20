@@ -94,7 +94,13 @@ playlist. vibeamp supplies what is underneath it through two extension points.
 - `__butterchurnOptions` loads MilkDrop, through a dynamic import so the visualiser
   and its presets stay out of the first load. They are two chunks of about 200 KB
   each, fetched the first time the window is opened, and the base bundle is
-  unchanged.
+  unchanged. Both packages predate modules, so neither import is the shape it
+  looks like: butterchurn hides behind `default`, and the preset pack's default
+  export is a class whose static `getPresets()` returns the map. Reading it as a
+  map yields no presets and butterchurn falls back to one fixed pattern, which
+  looks like a working visualiser — the first version of this shipped that way for
+  a day. `presets.test.ts` imports the real package rather than a mock, because a
+  mock would only assert that the code agrees with the assumption that was wrong.
 - `windowLayout` places the windows. Left to itself Webamp opens MilkDrop at the
   main window's own position, so the visualiser lands on top of the transport, the
   track title and the seek bar. The layout states the arrangement instead: the three
