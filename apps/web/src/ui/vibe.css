@@ -227,6 +227,11 @@
   width: 84px;
 }
 
+.vibe-row .vibe-select--narrow {
+  width: 52px;
+  margin-right: auto;
+}
+
 .vibe-row .vibe-button--autodj {
   margin-left: auto;
   padding: 3px 12px;

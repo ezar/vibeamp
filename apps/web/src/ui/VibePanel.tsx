@@ -20,6 +20,9 @@ import { ENERGY_SHAPE_LABELS, MIN_ANALYSED_TRACKS } from '@vibeamp/dj';
 import { useDraggable } from './useDraggable.js';
 import './vibe.css';
 
+/** Cross-fade lengths the window offers, in seconds. */
+const CROSSFADE_CHOICES = [0, 2, 4, 6, 8, 12] as const;
+
 /** The sliders, in the order they appear. */
 const SLIDERS: ReadonlyArray<{
   key: keyof VibeTarget;
@@ -51,6 +54,9 @@ export interface VibePanelProps {
   onChange: (patch: Partial<VibeTarget>) => void;
   /** Called on release, when the queue should be replanned. */
   onCommit: () => void;
+  /** Cross-fade length in seconds. 0 plays tracks back to back. */
+  crossfadeSec: number;
+  onCrossfadeChange: (seconds: number) => void;
   onShapeChange: (shape: EnergyShape) => void;
   onToggleAutoDj: (enabled: boolean) => void;
   /** Load a `.wsz` the user brings. The app ships no skins of its own. */
@@ -73,6 +79,8 @@ export function VibePanel({
   onOpenFolder,
   onChange,
   onCommit,
+  crossfadeSec,
+  onCrossfadeChange,
   onShapeChange,
   onToggleAutoDj,
   onLoadSkin,
@@ -171,6 +179,21 @@ export function VibePanel({
         </div>
 
         <div className="vibe-row vibe-row--secondary">
+          <label htmlFor="vibe-fade">fade</label>
+          <select
+            id="vibe-fade"
+            className="vibe-select--narrow"
+            value={crossfadeSec}
+            title="Seconds of cross-fade between tracks"
+            onChange={(event) => onCrossfadeChange(Number(event.target.value))}
+          >
+            {CROSSFADE_CHOICES.map((seconds) => (
+              <option key={seconds} value={seconds}>
+                {seconds === 0 ? 'off' : `${seconds}s`}
+              </option>
+            ))}
+          </select>
+
           {hasLibrary && (
             <button type="button" className="vibe-button" onClick={onOpenFolder}>
               Folder
