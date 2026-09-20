@@ -1,27 +1,30 @@
 /**
- * The vibe sliders.
+ * The vibe sliders, and the way into the app.
  *
- * The demonstration moment of the whole product: five vertical sliders that look
- * like they came off a 1997 equaliser, and moving one reorders what is coming next
+ * Two jobs. The first is the demonstration moment of the product: five vertical
+ * sliders in the Winamp idiom, and letting one go reorders what is coming next
  * without interrupting what is playing.
  *
- * Re-planning happens on release, not on every pixel of movement. Planning a queue
- * reads the whole analysed library, and doing that on `input` turns a slider drag
- * into a few hundred passes over it.
+ * The second is more basic and was missing. Connecting a folder is the one thing
+ * that has to happen before anything else works, and the shell only offers it three
+ * levels down its own menu — so this window leads with it until there is a library.
+ *
+ * Re-planning happens on release, not on every pixel of movement. Planning reads the
+ * whole analysed library, and doing that on `input` turns one drag into a few
+ * hundred passes over it.
  */
 
 import { useCallback } from 'react';
-import { useDraggable } from './useDraggable.js';
 import type { EnergyShape, VibeTarget } from '@vibeamp/core';
-import { ENERGY_SHAPE_LABELS } from '@vibeamp/dj';
-import { MIN_ANALYSED_TRACKS } from '@vibeamp/dj';
+import { ENERGY_SHAPE_LABELS, MIN_ANALYSED_TRACKS } from '@vibeamp/dj';
+import { useDraggable } from './useDraggable.js';
 import './vibe.css';
 
 /** The sliders, in the order they appear. */
 const SLIDERS: ReadonlyArray<{
   key: keyof VibeTarget;
   label: string;
-  /** What each end means, so the labels do not have to be guessed at. */
+  /** What each end means, so the short labels do not have to be guessed at. */
   title: string;
 }> = [
   { key: 'energy', label: 'energy', title: 'calm to intense' },
@@ -35,11 +38,16 @@ export interface VibePanelProps {
   target: VibeTarget;
   shape: EnergyShape;
   analysedCount: number;
+  /** Whether a folder has been connected in this session. */
+  hasLibrary: boolean;
   autoDjEnabled: boolean;
-  /** Analysis progress line, or null when nothing is being analysed. */
+  /** Progress line, or null when there is nothing to say. */
   status: string | null;
   /** 0..1, or null when there is no analysis running. */
   progress: number | null;
+  /** Where the window starts, normally just left of the shell. */
+  initialPosition: { x: number; y: number };
+  onOpenFolder: () => void;
   onChange: (patch: Partial<VibeTarget>) => void;
   /** Called on release, when the queue should be replanned. */
   onCommit: () => void;
@@ -57,9 +65,12 @@ export function VibePanel({
   target,
   shape,
   analysedCount,
+  hasLibrary,
   autoDjEnabled,
   status,
   progress,
+  initialPosition,
+  onOpenFolder,
   onChange,
   onCommit,
   onShapeChange,
@@ -70,7 +81,7 @@ export function VibePanel({
   libraryNotice,
 }: VibePanelProps): React.JSX.Element {
   const ready = analysedCount >= MIN_ANALYSED_TRACKS;
-  const { position, handleProps } = useDraggable({ x: 16, y: 16 });
+  const { position, handleProps } = useDraggable(initialPosition);
 
   const handleInput = useCallback(
     (key: keyof VibeTarget, value: string) => {
@@ -88,10 +99,23 @@ export function VibePanel({
     >
       <div className="vibe-titlebar" {...handleProps}>
         <span>VIBEAMP</span>
-        <span className="vibe-readout">{analysedCount} analysed</span>
+        <span className="vibe-count">{analysedCount} analysed</span>
       </div>
 
       <div className="vibe-body">
+        {!hasLibrary && (
+          <div className="vibe-hero">
+            <button
+              type="button"
+              className="vibe-button vibe-button--primary"
+              onClick={onOpenFolder}
+            >
+              OPEN FOLDER
+            </button>
+            <p>Or drop a folder on the player. Nothing leaves your machine.</p>
+          </div>
+        )}
+
         <div className="vibe-sliders">
           {SLIDERS.map(({ key, label, title }) => (
             <div className="vibe-slider" key={key}>
@@ -131,32 +155,61 @@ export function VibePanel({
             ))}
           </select>
 
-          <button type="button" disabled={!ready} onClick={() => onToggleAutoDj(!autoDjEnabled)}>
-            {autoDjEnabled ? 'Auto-DJ on' : 'Auto-DJ off'}
+          <button
+            type="button"
+            className={`vibe-button vibe-button--autodj${autoDjEnabled ? ' vibe-button--on' : ''}`}
+            disabled={!ready}
+            title={
+              autoDjEnabled
+                ? 'The queue is planned from what is playing'
+                : 'Hand the playlist over to the auto-DJ'
+            }
+            onClick={() => onToggleAutoDj(!autoDjEnabled)}
+          >
+            AUTO-DJ
           </button>
         </div>
 
-        <div className="vibe-row">
-          <button type="button" onClick={onLoadSkin} title="Load a .wsz Winamp skin">
-            Skin…
+        <div className="vibe-row vibe-row--secondary">
+          {hasLibrary && (
+            <button type="button" className="vibe-button" onClick={onOpenFolder}>
+              Folder
+            </button>
+          )}
+          <button
+            type="button"
+            className="vibe-button"
+            onClick={onLoadSkin}
+            title="Load a .wsz Winamp skin"
+          >
+            Skin
           </button>
-          <button type="button" onClick={onExport} title="Save the index, descriptors included">
+          <button
+            type="button"
+            className="vibe-button"
+            onClick={onExport}
+            title="Save the index, descriptors included"
+          >
             Export
           </button>
-          <button type="button" onClick={onImport} title="Merge an exported index">
+          <button
+            type="button"
+            className="vibe-button"
+            onClick={onImport}
+            title="Merge an exported index"
+          >
             Import
           </button>
         </div>
 
         <div className="vibe-status">
           {libraryNotice !== null && <p>{libraryNotice}</p>}
-          {!ready && (
+          {status !== null && <p>{status}</p>}
+          {hasLibrary && !ready && status === null && (
             <p className="vibe-warning">
-              Auto-DJ needs {MIN_ANALYSED_TRACKS} analysed tracks. Too few, and it produces queues
-              that are obviously wrong.
+              {MIN_ANALYSED_TRACKS - analysedCount} more analysed and the auto-DJ wakes up.
             </p>
           )}
-          {status !== null && <p>{status}</p>}
           {progress !== null && (
             <div
               className="vibe-progress"

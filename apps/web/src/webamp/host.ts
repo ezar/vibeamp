@@ -26,6 +26,14 @@ export interface HostOptions {
   openFolder: () => Promise<WebampTrack[] | null>;
   /** Called when the shell moves to another track, so the queue can top itself up. */
   onTrackChange?: (url: string | null) => void;
+  /**
+   * Called when something is dropped on the player.
+   *
+   * Dragging a folder in is what people try first, and it is the one entry point
+   * the shell offers that does not need a menu. Returns true when it was handled,
+   * so the shell's own drop behaviour can be skipped.
+   */
+  onDropFolder?: (event: React.DragEvent<HTMLDivElement>) => Promise<boolean>;
   /** Where to render. Webamp centres itself on this node. */
   container: HTMLElement;
   /** Skins the user has brought, listed in the shell's own skin menu. */
@@ -67,6 +75,12 @@ export async function createHost(options: HostOptions): Promise<WebampHost> {
     // Webamp mounts itself at the end of <body> rather than inside the node it is
     // given, so the vibe window's place in the stack has to be settled explicitly.
     zIndex: 10,
+    handleTrackDropEvent: (event) => {
+      // Returning an empty list tells the shell we dealt with it. The scan fills the
+      // playlist itself, through the same path as the menu entry.
+      void options.onDropFolder?.(event);
+      return [];
+    },
     filePickers: [
       {
         contextMenuName: 'Open folder…',

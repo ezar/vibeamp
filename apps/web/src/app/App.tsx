@@ -13,6 +13,8 @@ import { useAppStore } from '../state/store.js';
 import { createServices } from './services.js';
 import type { Services } from './services.js';
 import { connectFolder, readTagsInBackground } from './library.js';
+import type { FolderSource } from './library.js';
+import { folderFromDrop } from '../library/drop.js';
 import { createHost, isSupported } from '../webamp/host.js';
 import type { WebampHost } from '../webamp/host.js';
 import { PlaylistBridge } from '../webamp/playlist.js';
@@ -46,6 +48,10 @@ export function App(): React.JSX.Element {
   } | null>(null);
 
   const [ready, setReady] = useState(false);
+  const [hasLibrary, setHasLibrary] = useState(false);
+  // Where the vibe window opens. Measured from the shell once it has rendered, so
+  // the two sit together instead of at opposite corners of an empty page.
+  const [panelPosition, setPanelPosition] = useState({ x: 16, y: 16 });
   const [libraryNotice, setLibraryNotice] = useState<string | null>(null);
   const [playingTrack, setPlayingTrack] = useState<Track | null>(null);
   const store = useAppStore();
@@ -77,6 +83,15 @@ export function App(): React.JSX.Element {
         openFolder: async () => {
           await handleConnectFolder();
           return [];
+        },
+        onDropFolder: async (event) => {
+          const folder = await folderFromDrop(event.dataTransfer);
+          if (folder === null) {
+            setLibraryNotice('Drop a folder, not single files: a track needs a folder to scan.');
+            return false;
+          }
+          await handleConnectFolder(folder);
+          return true;
         },
         onTrackChange: (url) => {
           const current = runtime.current;
@@ -112,6 +127,7 @@ export function App(): React.JSX.Element {
 
       const counts = await services.repository.counts();
       useAppStore.getState().setAnalysedCount(counts.done);
+      setPanelPosition(besideTheShell());
       setReady(true);
     })();
 
@@ -131,19 +147,23 @@ export function App(): React.JSX.Element {
   }, []);
 
   /** Pick a folder, put it in the playlist, and start analysing it. */
-  const handleConnectFolder = useCallback(async () => {
+  const handleConnectFolder = useCallback(async (source?: FolderSource) => {
     const current = runtime.current;
     if (current === null) return;
     const state = useAppStore.getState();
 
     try {
       state.setScanning(true);
-      const scanned = await connectFolder(current.services, (progress) =>
-        state.setScanProgress(progress),
+      const scanned = await connectFolder(
+        current.services,
+        (progress) => state.setScanProgress(progress),
+        source,
       );
       if (scanned === null || scanned.length === 0) return;
 
       state.setRootName(`${scanned.length} files`);
+      setHasLibrary(true);
+      setLibraryNotice(null);
 
       // Playable immediately, before a single track has been analysed. The app has
       // to be useful in its first minute, not after its first hour.
@@ -265,6 +285,9 @@ export function App(): React.JSX.Element {
           target={store.vibeTarget}
           shape={store.energyShape}
           analysedCount={store.analysedCount}
+          hasLibrary={hasLibrary}
+          initialPosition={panelPosition}
+          onOpenFolder={() => void handleConnectFolder()}
           autoDjEnabled={store.autoDjEnabled}
           status={statusLine(store)}
           progress={analysisFraction(store)}
@@ -298,6 +321,26 @@ export function App(): React.JSX.Element {
       {!ready && store.error === null && <p className="app-loading">Loading the shell…</p>}
     </div>
   );
+}
+
+/**
+ * Where to open the vibe window: just left of the shell, aligned with its top.
+ *
+ * Webamp centres itself on the container and mounts at the end of `<body>`, so the
+ * only reliable way to sit beside it is to measure it once it is there. Falls back
+ * to the top-left corner on a screen too narrow to fit both.
+ */
+function besideTheShell(): { x: number; y: number } {
+  const GAP = 14;
+  const PANEL_WIDTH = 277;
+
+  const main = document.querySelector('#main-window');
+  if (main === null) return { x: 16, y: 16 };
+
+  const rect = main.getBoundingClientRect();
+  const x = rect.left - PANEL_WIDTH - GAP;
+  if (x < 8) return { x: 16, y: 16 };
+  return { x, y: rect.top };
 }
 
 type StoreState = ReturnType<typeof useAppStore.getState>;

@@ -53,17 +53,45 @@ test('shows the vibe window on screen, not behind or below the shell', async ({ 
   expect(box!.x).toBeGreaterThanOrEqual(0);
 });
 
-test('disables the auto-DJ until there is enough analysed, and says why', async ({ page }) => {
+test('leads with the one thing that has to happen first', async ({ page }) => {
+  // The regression this exists for: connecting a folder is the only way anything
+  // else works, and the shell buries it three levels down its own menu. With no
+  // visible entry point the app looks broken on arrival — nothing plays, nothing
+  // analyses, and the auto-DJ sits at zero forever.
   const vibe = page.locator('.vibe-window');
-  await expect(vibe).toContainText('Auto-DJ needs 30 analysed tracks');
+  const open = vibe.getByRole('button', { name: 'OPEN FOLDER' });
+
+  await expect(open).toBeVisible();
+  await expect(open).toBeEnabled();
+  await expect(vibe).toContainText('drop a folder on the player');
+});
+
+test('disables the auto-DJ until there is enough analysed', async ({ page }) => {
+  const vibe = page.locator('.vibe-window');
   await expect(vibe.locator('input[type=range]').first()).toBeDisabled();
+  await expect(vibe.getByRole('button', { name: 'AUTO-DJ' })).toBeDisabled();
 });
 
 test('offers the library actions', async ({ page }) => {
   const vibe = page.locator('.vibe-window');
-  await expect(vibe.getByRole('button', { name: 'Skin…' })).toBeVisible();
-  await expect(vibe.getByRole('button', { name: 'Export' })).toBeVisible();
-  await expect(vibe.getByRole('button', { name: 'Import' })).toBeVisible();
+  for (const name of ['Skin', 'Export', 'Import']) {
+    await expect(vibe.getByRole('button', { name, exact: true })).toBeVisible();
+  }
+});
+
+test('opens the vibe window beside the shell, not across the page from it', async ({ page }) => {
+  // It used to open in the top-left corner while the shell centred itself, leaving
+  // a screen-wide gap between the two halves of the same application.
+  const vibe = await page.locator('.vibe-window').boundingBox();
+  const shell = await page.locator('#main-window').boundingBox();
+  expect(vibe).not.toBeNull();
+  expect(shell).not.toBeNull();
+
+  const gap = shell!.x - (vibe!.x + vibe!.width);
+  expect(gap).toBeGreaterThanOrEqual(0);
+  expect(gap).toBeLessThan(40);
+  // Aligned tops, so they read as one window group.
+  expect(Math.abs(vibe!.y - shell!.y)).toBeLessThan(4);
 });
 
 test('toggles the debug panel without resizing the player', async ({ page }) => {
