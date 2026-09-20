@@ -11,6 +11,7 @@ import { LibraryRepository } from '../library/repository.js';
 import { SessionFiles } from '../library/session.js';
 import { AnalysisPool } from '../analysis/pool.js';
 import { AutoDj } from '../dj/autoDj.js';
+import { DebugStats } from '../debug/stats.js';
 
 export interface Services {
   db: VibeampDatabase;
@@ -18,6 +19,7 @@ export interface Services {
   files: SessionFiles;
   pool: AnalysisPool;
   autoDj: AutoDj;
+  stats: DebugStats;
   dispose: () => void;
 }
 
@@ -26,11 +28,13 @@ export function createServices(): Services {
   const repository = new LibraryRepository(db);
   const files = new SessionFiles();
 
+  const stats = new DebugStats();
   const pool = new AnalysisPool({
     createWorker: () =>
       // Vite turns this into a bundled module worker; the URL form is what it looks
       // for, so it cannot be shortened into a variable.
       new Worker(new URL('../analysis/worker.ts', import.meta.url), { type: 'module' }),
+    onProgress: (trackId, stage) => stats.noteStage(trackId, stage),
   });
 
   const autoDj = new AutoDj({
@@ -44,6 +48,7 @@ export function createServices(): Services {
     files,
     pool,
     autoDj,
+    stats,
     dispose: () => {
       pool.dispose();
       files.clear();

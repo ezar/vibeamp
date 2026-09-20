@@ -19,6 +19,7 @@ export {
   percentileOf,
   descriptorInputs,
   recordFeatures,
+  recordInputs,
   normaliseFeatures,
   renormalise,
 } from './normalise.js';

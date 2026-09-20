@@ -30,7 +30,12 @@ per track.
   coming next. The track that is playing is never interrupted.
 - **Is a real Winamp.** The shell is [Webamp](https://webamp.org): three draggable,
   dockable windows, the ten-band equaliser on Winamp's own frequencies, the spectrum
-  analyser, the hotkeys, and any `.wsz` skin you already have.
+  analyser, the hotkeys, and any `.wsz` skin you already have. Load one and it is
+  kept, and it joins the shell's own skin menu. None ship with the app — classic
+  skins belong to the people who made them.
+- **Lets you take your library with you.** Export the whole index, descriptors
+  included, as one JSON file. Import it on another machine and nothing is analysed
+  twice: tracks are matched by what is in them, not by where they are.
 - **Is honest about what it knows.** Below 30 analysed tracks the auto-DJ turns
   itself off and says why, because a recommender with too little to go on produces
   queues that are obviously wrong. Descriptors measured before the library was big
@@ -55,7 +60,8 @@ pnpm dev
 ```
 
 Then open the app, choose **Open folder…** from the shell's menu, and point it at
-your music.
+your music. `Ctrl`+`Shift`+`D` opens the debug panel, which shows where the analysis
+time is going and what the playing track actually measured.
 
 Chrome and Edge on the desktop are the target: they can remember the folder between
 sessions. Firefox and Safari work through a fallback picker and ask for the folder

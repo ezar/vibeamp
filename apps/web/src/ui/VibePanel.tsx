@@ -45,6 +45,12 @@ export interface VibePanelProps {
   onCommit: () => void;
   onShapeChange: (shape: EnergyShape) => void;
   onToggleAutoDj: (enabled: boolean) => void;
+  /** Load a `.wsz` the user brings. The app ships no skins of its own. */
+  onLoadSkin: () => void;
+  onExport: () => void;
+  onImport: () => void;
+  /** Result of the last export or import, shown for a moment. */
+  libraryNotice: string | null;
 }
 
 export function VibePanel({
@@ -58,6 +64,10 @@ export function VibePanel({
   onCommit,
   onShapeChange,
   onToggleAutoDj,
+  onLoadSkin,
+  onExport,
+  onImport,
+  libraryNotice,
 }: VibePanelProps): React.JSX.Element {
   const ready = analysedCount >= MIN_ANALYSED_TRACKS;
   const { position, handleProps } = useDraggable({ x: 16, y: 16 });
@@ -126,7 +136,20 @@ export function VibePanel({
           </button>
         </div>
 
+        <div className="vibe-row">
+          <button type="button" onClick={onLoadSkin} title="Load a .wsz Winamp skin">
+            Skin…
+          </button>
+          <button type="button" onClick={onExport} title="Save the index, descriptors included">
+            Export
+          </button>
+          <button type="button" onClick={onImport} title="Merge an exported index">
+            Import
+          </button>
+        </div>
+
         <div className="vibe-status">
+          {libraryNotice !== null && <p>{libraryNotice}</p>}
           {!ready && (
             <p className="vibe-warning">
               Auto-DJ needs {MIN_ANALYSED_TRACKS} analysed tracks. Too few, and it produces queues

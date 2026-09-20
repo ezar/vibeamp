@@ -1,0 +1,65 @@
+/* The debug panel. Deliberately plain: it is a readout, not part of the shell. */
+
+.debug-panel {
+  position: absolute;
+  z-index: 30;
+  top: 16px;
+  right: 16px;
+  width: 340px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 10px 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #c8c8d4;
+  background: #16161c;
+  border: 1px solid #3a3a48;
+}
+
+.debug-panel h2 {
+  margin: 0 0 8px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #00ff00;
+  text-transform: uppercase;
+}
+
+.debug-panel h3 {
+  margin: 12px 0 4px;
+  font-size: 10px;
+  color: #8ce68c;
+  text-transform: uppercase;
+}
+
+.debug-panel table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.debug-panel td {
+  padding: 1px 0;
+  vertical-align: top;
+}
+
+.debug-panel td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.debug-panel .debug-empty {
+  color: #6a6a78;
+}
+
+.debug-panel .debug-failure {
+  color: #ff8888;
+}
+
+.debug-panel .debug-hint {
+  margin: 10px 0 0;
+  color: #6a6a78;
+}
+
+.debug-panel .debug-provisional {
+  color: #ffcc44;
+}

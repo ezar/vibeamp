@@ -19,6 +19,7 @@
 import Webamp from 'webamp';
 import type { Options, Track as WebampTrack } from 'webamp';
 import { VibeampMedia } from '../audio/VibeampMedia.js';
+import type { SkinChoice } from '../skin/skins.js';
 
 export interface HostOptions {
   /** Opens the folder picker and returns what it found, or `null` if cancelled. */
@@ -27,6 +28,10 @@ export interface HostOptions {
   onTrackChange?: (url: string | null) => void;
   /** Where to render. Webamp centres itself on this node. */
   container: HTMLElement;
+  /** Skins the user has brought, listed in the shell's own skin menu. */
+  skins?: readonly SkinChoice[];
+  /** The skin to start in, or nothing for Webamp's built-in default. */
+  initialSkin?: SkinChoice | undefined;
 }
 
 export interface WebampHost {
@@ -71,6 +76,12 @@ export async function createHost(options: HostOptions): Promise<WebampHost> {
         requiresNetwork: false,
       },
     ],
+    ...(options.skins !== undefined && options.skins.length > 0
+      ? { availableSkins: [...options.skins] }
+      : {}),
+    // Object URLs are same-origin, so the CORS warning on this option does not
+    // apply: the skin never leaves the device it was loaded from.
+    ...(options.initialSkin !== undefined ? { initialSkin: { url: options.initialSkin.url } } : {}),
     __customMediaClass: CapturedMedia,
   };
 

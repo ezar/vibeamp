@@ -23,11 +23,12 @@ require touching the shell.
 
 ```bash
 pnpm install
-pnpm verify           # format, lint, typecheck, tests
+pnpm verify           # format, lint, typecheck, unit tests
+pnpm test:e2e         # the browser seam, against a production build
 pnpm dev
 ```
 
-`pnpm verify` is what CI runs. It should be green before you open a pull request.
+CI runs both. They should be green before you open a pull request.
 
 ## The shape of the repository
 
@@ -96,6 +97,23 @@ cannot live inside the equaliser window
 tail cannot be rewritten
 ([0004](docs/decisions/0004-the-plan-lives-outside-the-shell.md)). If you find a
 third, add a record.
+
+**Check any keyboard shortcut you add against Winamp's.** The shell has hotkeys
+enabled and matches Ctrl+D without looking at Shift, so Ctrl+Shift+D opened the
+debug panel and doubled the player at the same time. The fix is a capture-phase
+listener that swallows the key, and `e2e/shell.spec.ts` asserts the player does not
+resize — add a case there for whatever you bind.
+
+## End to end tests
+
+`e2e/` covers what only exists in a browser: the shell rendering, our windows
+landing somewhere visible, shortcuts not colliding, and the service worker
+registering. It runs against a production build, because that is what the service
+worker and the bundled shell behave like.
+
+Reach for it when a bug could not have been caught by a unit test. Three already
+have been: a window rendered below the viewport, a window rendered underneath the
+shell, and the hotkey collision above.
 
 ## Pull requests
 

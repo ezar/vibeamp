@@ -12,6 +12,7 @@ import {
   createLibraryStatistics,
   normaliseFeatures,
   recordFeatures,
+  recordInputs,
   renormalise,
 } from '@vibeamp/core';
 import type { LibraryStatistics, RawFeatures, Track, TrackStatus } from '@vibeamp/core';
@@ -166,6 +167,27 @@ export class LibraryRepository {
         });
       await this.db.tracks.bulkPut(updates);
     });
+  }
+
+  /**
+   * Recompute the library distribution from every stored analysis, then re-rank.
+   *
+   * Needed after an import, and after anything else that changes which tracks the
+   * library holds. Merging histograms is not an option: two libraries' histograms
+   * count different tracks, so adding them produces a scale that describes neither.
+   */
+  async rebuildStatistics(): Promise<LibraryStatistics> {
+    const statistics = createLibraryStatistics();
+    await this.db.tracks
+      .where('status')
+      .equals('done')
+      .each((track) => {
+        if (track.analysis !== null) recordInputs(statistics, track.analysis.inputs);
+      });
+
+    await writeSetting(this.db, SETTING_KEYS.statistics, statistics);
+    await this.renormaliseAll(statistics);
+    return statistics;
   }
 
   async allAnalysed(): Promise<Track[]> {

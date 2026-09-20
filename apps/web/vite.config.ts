@@ -13,7 +13,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // Prompt rather than autoUpdate. The service worker precaches the whole app,
+      // and swapping it under a running session risks serving a new page against an
+      // old worker chunk. Offline-first is the point here, so a reload the user
+      // chooses is better than one they did not.
+      registerType: 'prompt',
       manifest: {
         name: 'vibeamp',
         short_name: 'vibeamp',

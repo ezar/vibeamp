@@ -36,6 +36,22 @@ export interface SettingRecord {
   value: unknown;
 }
 
+/**
+ * A Winamp skin the user brought.
+ *
+ * Skins are stored as the `.wsz` the user chose, never shipped with the app.
+ * Classic skins are the work of their authors and redistributing them is not ours
+ * to do; the shell can load any of them, so there is no reason to.
+ */
+export interface StoredSkin {
+  id: string;
+  /** Shown in the shell's own skin menu. Taken from the file name. */
+  name: string;
+  /** The `.wsz` itself, which is a zip. Dexie stores a Blob natively. */
+  data: Blob;
+  addedAt: number;
+}
+
 /** Keys used in the `settings` store. */
 export const SETTING_KEYS = {
   statistics: 'library.statistics',
@@ -43,6 +59,7 @@ export const SETTING_KEYS = {
   energyShape: 'dj.energyShape',
   crossfadeSec: 'audio.crossfadeSec',
   lastTrackId: 'player.lastTrackId',
+  lastSkinId: 'skin.lastId',
 } as const;
 
 export class VibeampDatabase extends Dexie {
@@ -50,6 +67,7 @@ export class VibeampDatabase extends Dexie {
   tracks!: EntityTable<Track, 'id'>;
   playHistory!: EntityTable<PlayEvent, 'id'>;
   settings!: EntityTable<SettingRecord, 'key'>;
+  skins!: EntityTable<StoredSkin, 'id'>;
 
   constructor(name = 'vibeamp') {
     super(name);
@@ -60,6 +78,12 @@ export class VibeampDatabase extends Dexie {
       tracks: 'id, status, rootId, meta.artist, analysis.bpm, analysis.energy',
       playHistory: '++id, trackId, playedAt',
       settings: 'key',
+    });
+
+    // Version 2 adds the skins the user brings. Dexie carries every existing store
+    // forward untouched, so an upgrade costs nobody their analysis.
+    this.version(2).stores({
+      skins: 'id, name, addedAt',
     });
   }
 }

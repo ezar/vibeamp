@@ -523,13 +523,64 @@ honestly.
 4. ~~The analysis pipeline end to end.~~
 5. ~~The remaining descriptors and normalisation.~~
 6. ~~The auto-DJ and the vibe sliders.~~
-7. The shell and skins — Webamp's, so mostly choosing defaults.
-8. PWA, export and import, the debug panel.
+7. ~~The shell and skins — Webamp's, so mostly choosing defaults.~~
+8. ~~PWA, export and import, the debug panel.~~
 
 Version 1 of this document called step 4 the highest technical risk, and it was
 right to: the tempo estimator needed three separate corrections before it stopped
 reporting half tempo, and each was found by a test rather than by reading the code.
 Removing WebAssembly removed the other half of that risk.
+
+## Skins, export and the debug panel
+
+### Skins
+
+The user brings their own `.wsz`. None ship with the app: classic skins are the work
+of their authors and redistributing them is not ours to do, and the shell loads any
+of them, so there is no reason to. A skin is copied into IndexedDB when it is picked
+— a `File` is a handle onto something on disk, and the user is free to move it a
+moment later — and appears in the shell's own skin menu on the next start, because
+`availableSkins` is fixed when the shell is constructed.
+
+### Export and import
+
+The whole index as JSON: tracks, descriptors, the values the percentiles were
+computed from, and the play history. No audio, and no folder handles, which mean
+nothing on another machine.
+
+Coming back in, tracks are matched by content hash, so an export taken on one
+computer lands correctly on another where every path is different. **Paths are not
+taken from the export**: a track already here keeps the location it has on this
+machine, and only its analysis can be replaced — by a newer pipeline version, or by
+an analysis where there was none. Play events are matched on track and timestamp, so
+importing the same file twice does not double every play count and skew the
+familiarity slider.
+
+Afterwards the distribution is **rebuilt** from every stored analysis rather than
+adjusted. Merging two libraries' histograms would be adding counts of different
+tracks together, producing a scale that describes neither.
+
+### The debug panel
+
+Behind Ctrl+Shift+D, because it is for whoever is tuning the engine rather than for
+whoever is listening. It shows where the analysis time goes (mean per stage, decode
+time, end-to-end per track), what failed and why, and the descriptors of the playing
+track — which is what decides whether a bad queue is the scoring's fault or the
+descriptors'.
+
+Stage timings are per job, because four workers run at once and one shared timer
+would report whatever the last worker happened to do.
+
+**The shortcut is captured and swallowed.** Winamp binds Ctrl+D to double size and
+the shell matches it without looking at Shift, so the obvious listener opened the
+panel and doubled the player at the same time. Any shortcut added here has to be
+checked against the shell's, and that check is an end-to-end test.
+
+### Updates
+
+The service worker precaches the whole app, so a new version is **offered**, not
+applied: activating one under a running session risks serving a new page against an
+old chunk, and the session it would interrupt is someone listening to music.
 
 ## Version 2: semantic search
 

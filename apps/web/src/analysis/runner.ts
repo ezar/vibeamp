@@ -15,6 +15,7 @@ import type { LibraryRepository } from '../library/repository.js';
 import { UndecodableError, decodeMono } from './decode.js';
 import type { AnalysisPool } from './pool.js';
 import type { Stage } from '@vibeamp/analysis';
+import type { DebugStats } from '../debug/stats.js';
 
 /** Tracks fetched from the database per round. */
 const BATCH_SIZE = 32;
@@ -38,6 +39,8 @@ export interface RunnerOptions {
   /** Returns the file for a track, or `null` when it can no longer be reached. */
   resolveFile: (track: Track) => Promise<File | null>;
   onProgress?: (progress: RunnerProgress) => void;
+  /** Where the timings and failures go, for the debug panel. */
+  stats?: DebugStats;
   signal?: AbortSignal;
 }
 
@@ -101,8 +104,9 @@ export class AnalysisRunner {
   }
 
   private async analyseOne(track: Track): Promise<void> {
-    const { repository, pool, resolveFile } = this.options;
+    const { repository, pool, resolveFile, stats } = this.options;
     this.currentTitle = track.meta.title ?? track.fileName;
+    const startedAt = Date.now();
 
     const file = await resolveFile(track);
     if (file === null) {
@@ -118,10 +122,13 @@ export class AnalysisRunner {
 
     await repository.setStatus(track.id, 'decoding');
     let decoded;
+    const decodeStartedAt = Date.now();
     try {
       decoded = await decodeMono(file);
+      stats?.noteDecode(Date.now() - decodeStartedAt);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      stats?.noteFailure(track.id, 'decode', message);
       await repository.recordFailure(track.id, message, !(error instanceof UndecodableError));
       return;
     }
@@ -137,8 +144,10 @@ export class AnalysisRunner {
 
     if (outcome.features !== undefined) {
       await repository.saveAnalysis(track.id, outcome.features, decoded.durationSec);
+      stats?.noteTrackDone(track.id, Date.now() - startedAt);
       this.analysed++;
     } else if (outcome.error !== undefined) {
+      stats?.noteFailure(track.id, outcome.error.code, outcome.error.message);
       await repository.recordFailure(track.id, outcome.error.message, outcome.retryable);
     }
 

@@ -136,7 +136,18 @@ export function descriptorInputs(raw: RawFeatures): NormalisationInputs {
 
 /** Fold a track's descriptors into the library distribution. */
 export function recordFeatures(statistics: LibraryStatistics, raw: RawFeatures): void {
-  const inputs = descriptorInputs(raw);
+  recordInputs(statistics, descriptorInputs(raw));
+}
+
+/**
+ * Fold already-extracted inputs into a distribution.
+ *
+ * What rebuilding the distribution from scratch needs: every analysis stores the
+ * values its percentiles came from, so the histograms can be recomputed over the
+ * whole library without decoding anything. Merging two libraries' histograms would
+ * be the alternative, and it is simply wrong — they count different tracks.
+ */
+export function recordInputs(statistics: LibraryStatistics, inputs: NormalisationInputs): void {
   addSample(statistics.loudness, inputs.loudness);
   addSample(statistics.brightness, inputs.brightness);
   addSample(statistics.compression, inputs.compression);

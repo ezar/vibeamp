@@ -18,6 +18,20 @@ import type { WebampHost } from '../webamp/host.js';
 import { PlaylistBridge } from '../webamp/playlist.js';
 import { QueueController } from '../dj/queueController.js';
 import { AnalysisRunner } from '../analysis/runner.js';
+import { DebugPanel, useDebugPanel } from '../ui/DebugPanel.jsx';
+import { OfflineNotice } from '../ui/OfflineNotice.jsx';
+import { loadSkins, promptForSkin, rememberSkin, saveSkin } from '../skin/skins.js';
+import type { LoadedSkins } from '../skin/skins.js';
+import {
+  downloadBlob,
+  exportLibrary,
+  exportToBlob,
+  importLibrary,
+  parseExport,
+  promptForExport,
+} from '../library/exchange.js';
+import type { Track } from '@vibeamp/core';
+import { defaultWorkerCount } from '../analysis/pool.js';
 import './app.css';
 
 export function App(): React.JSX.Element {
@@ -28,10 +42,14 @@ export function App(): React.JSX.Element {
     bridge: PlaylistBridge;
     queue: QueueController;
     runner: AnalysisRunner | null;
+    skins: LoadedSkins;
   } | null>(null);
 
   const [ready, setReady] = useState(false);
+  const [libraryNotice, setLibraryNotice] = useState<string | null>(null);
+  const [playingTrack, setPlayingTrack] = useState<Track | null>(null);
   const store = useAppStore();
+  const debugOpen = useDebugPanel();
 
   useEffect(() => {
     if (!isSupported()) {
@@ -49,18 +67,31 @@ export function App(): React.JSX.Element {
       // may evict IndexedDB under disk pressure, and hours of analysis go with it.
       await navigator.storage?.persist?.();
 
+      // Skins the user brought, so they appear in the shell's own skin menu.
+      const skins = await loadSkins(services.db);
+
       const host = await createHost({
         container,
+        skins: skins.choices,
+        initialSkin: skins.initial,
         openFolder: async () => {
           await handleConnectFolder();
           return [];
         },
         onTrackChange: (url) => {
-          void runtime.current?.queue.onTrackChanged(url);
+          const current = runtime.current;
+          if (current === undefined || current === null) return;
+          void current.queue.onTrackChanged(url).then(async () => {
+            const id = current.queue.playingTrackId;
+            setPlayingTrack(
+              id === null ? null : ((await current.services.repository.get(id)) ?? null),
+            );
+          });
         },
       });
 
       if (disposed) {
+        skins.dispose();
         host.dispose();
         services.dispose();
         return;
@@ -76,7 +107,7 @@ export function App(): React.JSX.Element {
         };
       });
 
-      runtime.current = { services, host, bridge, queue, runner: null };
+      runtime.current = { services, host, bridge, queue, runner: null, skins };
       host.media.setCrossfadeSeconds(useAppStore.getState().crossfadeSec);
 
       const counts = await services.repository.counts();
@@ -88,6 +119,7 @@ export function App(): React.JSX.Element {
       disposed = true;
       const current = runtime.current;
       current?.runner?.stop();
+      current?.skins.dispose();
       current?.bridge.dispose();
       current?.host.dispose();
       current?.services.dispose();
@@ -144,6 +176,7 @@ export function App(): React.JSX.Element {
       repository: current.services.repository,
       pool: current.services.pool,
       resolveFile: async (track) => current.services.files.resolve(track),
+      stats: current.services.stats,
       onProgress: (progress) => {
         const state = useAppStore.getState();
         state.setAnalysis(progress);
@@ -165,6 +198,58 @@ export function App(): React.JSX.Element {
     void runtime.current?.queue.replan();
   }, []);
 
+  /** Load a `.wsz` the user brings. The app ships none of its own. */
+  const handleLoadSkin = useCallback(async () => {
+    const current = runtime.current;
+    if (current === null) return;
+
+    const file = await promptForSkin();
+    if (file === null) return;
+
+    try {
+      const skin = await saveSkin(current.services.db, file);
+      const url = URL.createObjectURL(skin.data);
+      current.host.webamp.setSkinFromUrl(url);
+      await current.host.webamp.skinIsLoaded();
+      await rememberSkin(current.services.db, skin.id);
+      // It joins the shell's own skin menu on the next start, because
+      // `availableSkins` is fixed when the shell is constructed.
+      setLibraryNotice(`Skin "${skin.name}" loaded.`);
+    } catch (error) {
+      setLibraryNotice(error instanceof Error ? error.message : 'that skin could not be read');
+    }
+  }, []);
+
+  const handleExport = useCallback(async () => {
+    const current = runtime.current;
+    if (current === null) return;
+
+    const data = await exportLibrary(current.services.db);
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadBlob(exportToBlob(data), `vibeamp-library-${stamp}.json`);
+    setLibraryNotice(`Exported ${data.tracks.length} tracks.`);
+  }, []);
+
+  const handleImport = useCallback(async () => {
+    const current = runtime.current;
+    if (current === null) return;
+
+    const file = await promptForExport();
+    if (file === null) return;
+
+    try {
+      const data = parseExport(await file.text());
+      const summary = await importLibrary(current.services.db, current.services.repository, data);
+      const counts = await current.services.repository.counts();
+      useAppStore.getState().setAnalysedCount(counts.done);
+      setLibraryNotice(
+        `Imported: ${summary.added} new, ${summary.improved} improved, ${summary.unchanged} unchanged.`,
+      );
+    } catch (error) {
+      setLibraryNotice(error instanceof Error ? error.message : 'that file could not be imported');
+    }
+  }, []);
+
   return (
     <div className="app">
       <div className="app-shell" ref={containerRef} />
@@ -181,8 +266,23 @@ export function App(): React.JSX.Element {
           onCommit={handleCommit}
           onShapeChange={store.setEnergyShape}
           onToggleAutoDj={handleToggleAutoDj}
+          onLoadSkin={() => void handleLoadSkin()}
+          onExport={() => void handleExport()}
+          onImport={() => void handleImport()}
+          libraryNotice={libraryNotice}
         />
       )}
+
+      {ready && debugOpen && runtime.current !== null && (
+        <DebugPanel
+          stats={runtime.current.services.stats}
+          track={playingTrack}
+          analysedCount={store.analysedCount}
+          workerCount={defaultWorkerCount()}
+        />
+      )}
+
+      <OfflineNotice />
 
       {store.error !== null && (
         <p className="app-error" role="alert">
