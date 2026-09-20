@@ -36,3 +36,11 @@ jobs:
       # not colliding with Winamp's. None of that fails to compile.
       - name: End to end tests
         run: pnpm test:e2e
+
+      # GitHub Pages serves the app from a subdirectory, which is exactly where
+      # absolute asset paths break. Building and running the suite against that
+      # layout catches it on the pull request rather than on the deployment.
+      - name: Build and test the GitHub Pages layout
+        env:
+          BASE_PATH: /vibeamp/
+        run: pnpm test:e2e

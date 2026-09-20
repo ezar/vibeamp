@@ -5,6 +5,10 @@
   <em>Your local music, in a real Winamp, with a queue ordered by how it sounds.</em>
 </p>
 
+<p align="center">
+  <a href="https://ezar.github.io/vibeamp/"><strong>Open vibeamp →</strong></a>
+</p>
+
 vibeamp points at a folder on your disk, listens to every track once, and then
 builds queues by feel rather than by folder, artist or the genre an ID3 tag claims.
 It wears a real Winamp 2.9 shell, loads real `.wsz` skins, and does all of it in the
@@ -59,8 +63,8 @@ pnpm verify     # format, lint, typecheck, tests
 pnpm dev
 ```
 
-Then open the app, choose **Open folder…** from the shell's menu, and point it at
-your music. `Ctrl`+`Shift`+`D` opens the debug panel, which shows where the analysis
+Or run it yourself. Then choose **Open folder…** from the shell's menu and point it
+at your music. `Ctrl`+`Shift`+`D` opens the debug panel, which shows where the analysis
 time is going and what the playing track actually measured.
 
 Chrome and Edge on the desktop are the target: they can remember the folder between
