@@ -72,6 +72,8 @@ const UNHOOKED_ENTRIES: ReadonlyArray<readonly [selector: string, name: string]>
 export interface WebampHost {
   webamp: Webamp;
   media: VibeampMedia;
+  /** Open or close the MilkDrop window, the same as the shell's own menu entry. */
+  toggleMilkdrop: () => void;
   dispose: () => void;
 }
 
@@ -200,6 +202,12 @@ export async function createHost(options: HostOptions): Promise<WebampHost> {
   return {
     webamp,
     media,
+    // `store` is part of Webamp's published surface and this action is a declared
+    // member of its `Action` union, so this is the API rather than a way around it.
+    // The shell owns the state: closing the window from its own title bar and then
+    // pressing the button again does the right thing without anything to keep in
+    // sync here.
+    toggleMilkdrop: () => webamp.store.dispatch({ type: 'TOGGLE_WINDOW', windowId: 'milkdrop' }),
     dispose: () => {
       document.removeEventListener('click', swallowUnhookedAlert, { capture: true });
       unsubscribe();

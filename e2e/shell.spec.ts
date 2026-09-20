@@ -164,11 +164,7 @@ test('opens MilkDrop beside the player, not across the transport', async ({ page
   // The regression this exists for: with no layout of its own Webamp opens MilkDrop
   // at the same position as the main window, so the first thing the visualiser does
   // is hide the play button, the track title and the seek bar behind itself.
-  await page.locator('#option').click({ force: true });
-  await page
-    .locator('li', { hasText: /^Milkdrop$/ })
-    .first()
-    .click({ force: true });
+  await page.locator('.vibe-window').getByRole('button', { name: 'Milkdrop' }).click();
 
   const milkdrop = page.locator('.gen-window');
   await expect(milkdrop).toBeVisible({ timeout: 20_000 });
@@ -193,6 +189,39 @@ test('opens MilkDrop beside the player, not across the transport', async ({ page
   expect(visualiser!.y).toBeCloseTo(main!.y, 0);
   expect(visualiser!.x + visualiser!.width).toBeLessThanOrEqual(viewport!.width);
   expect(visualiser!.y + visualiser!.height).toBeLessThanOrEqual(viewport!.height);
+});
+
+test('offers MilkDrop where it can be found, and closes it again', async ({ page }) => {
+  // The shell has its own entry for it, three levels into the Options menu and
+  // closed on arrival, which is indistinguishable from not being there at all.
+  const button = page.locator('.vibe-window').getByRole('button', { name: 'Milkdrop' });
+  const milkdrop = page.locator('.gen-window');
+
+  await expect(button).toBeVisible();
+  await expect(milkdrop).toHaveCount(0);
+
+  await button.click();
+  await expect(milkdrop).toBeVisible({ timeout: 20_000 });
+
+  await button.click();
+  await expect(milkdrop).toHaveCount(0);
+});
+
+test('keeps every control of the vibe window inside it', async ({ page }) => {
+  // The row that carries the button now holds six controls in 277 pixels.
+  const vibe = await page.locator('.vibe-window').boundingBox();
+  expect(vibe).not.toBeNull();
+
+  for (const name of ['Skin', 'Export', 'Import', 'Milkdrop']) {
+    const button = await page
+      .locator('.vibe-window')
+      .getByRole('button', { name, exact: true })
+      .boundingBox();
+    expect(button).not.toBeNull();
+    expect(button!.x).toBeGreaterThanOrEqual(vibe!.x);
+    expect(button!.x + button!.width).toBeLessThanOrEqual(vibe!.x + vibe!.width);
+    expect(button!.y + button!.height).toBeLessThanOrEqual(vibe!.y + vibe!.height);
+  }
 });
 
 test('answers the menu entries it does not support in its own words', async ({ page }) => {
