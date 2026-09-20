@@ -459,9 +459,12 @@ that it is not ready.
 
 The shell is Webamp's: three windows, docking, skins, hotkeys, the visualiser.
 
-MilkDrop opens from the shell's own menu, under Options. It is closed on arrival:
-the point of this player is the queue, and a visualiser nobody asked for is 400 KB
-and a WebGL context.
+MilkDrop has a button in the vibe window. The shell has its own entry for it, three
+levels into the Options menu, which is the same place "Open folder" was when nobody
+could find that either. It stays closed on arrival — the point of this player is the
+queue, and a visualiser nobody asked for is 400 KB and a WebGL context — but opening
+it is now one press. The button toggles `TOGGLE_WINDOW` on Webamp's own store, so
+closing the window from its title bar leaves nothing to keep in sync.
 
 ### The vibe window
 

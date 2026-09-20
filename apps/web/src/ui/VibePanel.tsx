@@ -63,6 +63,8 @@ export interface VibePanelProps {
   onLoadSkin: () => void;
   onExport: () => void;
   onImport: () => void;
+  /** Open or close MilkDrop. The shell's own entry for it is three levels down. */
+  onToggleMilkdrop: () => void;
   /** Result of the last export or import, shown for a moment. */
   libraryNotice: string | null;
 }
@@ -86,6 +88,7 @@ export function VibePanel({
   onLoadSkin,
   onExport,
   onImport,
+  onToggleMilkdrop,
   libraryNotice,
 }: VibePanelProps): React.JSX.Element {
   const ready = analysedCount >= MIN_ANALYSED_TRACKS;
@@ -194,35 +197,45 @@ export function VibePanel({
             ))}
           </select>
 
-          {hasLibrary && (
-            <button type="button" className="vibe-button" onClick={onOpenFolder}>
-              Folder
+          <div className="vibe-actions">
+            <button
+              type="button"
+              className="vibe-button"
+              onClick={onToggleMilkdrop}
+              title="Open or close the MilkDrop visualiser"
+            >
+              Milkdrop
             </button>
-          )}
-          <button
-            type="button"
-            className="vibe-button"
-            onClick={onLoadSkin}
-            title="Load a .wsz Winamp skin"
-          >
-            Skin
-          </button>
-          <button
-            type="button"
-            className="vibe-button"
-            onClick={onExport}
-            title="Save the index, descriptors included"
-          >
-            Export
-          </button>
-          <button
-            type="button"
-            className="vibe-button"
-            onClick={onImport}
-            title="Merge an exported index"
-          >
-            Import
-          </button>
+            {hasLibrary && (
+              <button type="button" className="vibe-button" onClick={onOpenFolder}>
+                Folder
+              </button>
+            )}
+            <button
+              type="button"
+              className="vibe-button"
+              onClick={onLoadSkin}
+              title="Load a .wsz Winamp skin"
+            >
+              Skin
+            </button>
+            <button
+              type="button"
+              className="vibe-button"
+              onClick={onExport}
+              title="Save the index, descriptors included"
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              className="vibe-button"
+              onClick={onImport}
+              title="Merge an exported index"
+            >
+              Import
+            </button>
+          </div>
         </div>
 
         <div className="vibe-status">

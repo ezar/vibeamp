@@ -188,6 +188,26 @@
   margin-top: 9px;
 }
 
+/* The bottom row carries up to six controls in 277px and one of them only appears
+   once a library is connected, so the buttons are their own group: they keep to the
+   right, and they wrap among themselves rather than pushing one off the edge. */
+.vibe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.vibe-actions .vibe-button {
+  padding: 3px 5px;
+}
+
+.vibe-actions .vibe-button:active:not(:disabled) {
+  padding: 4px 4px 2px 6px;
+}
+
 .vibe-row--secondary {
   margin-top: 7px;
   padding-top: 7px;

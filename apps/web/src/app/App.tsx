@@ -408,6 +408,7 @@ export function App(): React.JSX.Element {
           onLoadSkin={() => void handleLoadSkin()}
           onExport={() => void handleExport()}
           onImport={() => void handleImport()}
+          onToggleMilkdrop={() => runtime.current?.host.toggleMilkdrop()}
           libraryNotice={libraryNotice}
         />
       )}
