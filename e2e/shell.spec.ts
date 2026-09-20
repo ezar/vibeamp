@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { EQ_BANDS } from '../apps/web/src/audio/eq.js';
 
 /**
@@ -144,4 +145,107 @@ test('raises no console errors on a cold load', async ({ page }) => {
   await page.waitForTimeout(1500);
 
   expect(errors).toEqual([]);
+});
+
+/**
+ * Open one of the playlist window's bottom menus.
+ *
+ * The first click on an unfocused window only focuses it — Winamp's own behaviour,
+ * which Webamp keeps — so opening a menu can take two.
+ */
+async function openPlaylistMenu(page: Page, id: string): Promise<void> {
+  const menu = page.locator(`#${id}`);
+  await menu.click();
+  if ((await menu.getAttribute('class'))?.includes('selected') !== true) await menu.click();
+  await expect(menu).toHaveClass(/selected/);
+}
+
+test('opens MilkDrop beside the player, not across the transport', async ({ page }) => {
+  // The regression this exists for: with no layout of its own Webamp opens MilkDrop
+  // at the same position as the main window, so the first thing the visualiser does
+  // is hide the play button, the track title and the seek bar behind itself.
+  await page.locator('#option').click({ force: true });
+  await page
+    .locator('li', { hasText: /^Milkdrop$/ })
+    .first()
+    .click({ force: true });
+
+  const milkdrop = page.locator('.gen-window');
+  await expect(milkdrop).toBeVisible({ timeout: 20_000 });
+  // Butterchurn is fetched on demand, so the canvas arrives after the window.
+  await expect(milkdrop.locator('canvas')).toBeVisible({ timeout: 20_000 });
+
+  const visualiser = await milkdrop.boundingBox();
+  const main = await page.locator('#main-window').boundingBox();
+  const viewport = page.viewportSize();
+  expect(visualiser).not.toBeNull();
+  expect(main).not.toBeNull();
+
+  const overlaps =
+    visualiser!.x < main!.x + main!.width &&
+    main!.x < visualiser!.x + visualiser!.width &&
+    visualiser!.y < main!.y + main!.height &&
+    main!.y < visualiser!.y + visualiser!.height;
+  expect(overlaps).toBe(false);
+
+  // Docked against the stack's right edge, the way Winamp's windows snap.
+  expect(visualiser!.x).toBeCloseTo(main!.x + main!.width, 0);
+  expect(visualiser!.y).toBeCloseTo(main!.y, 0);
+  expect(visualiser!.x + visualiser!.width).toBeLessThanOrEqual(viewport!.width);
+  expect(visualiser!.y + visualiser!.height).toBeLessThanOrEqual(viewport!.height);
+});
+
+test('answers the menu entries it does not support in its own words', async ({ page }) => {
+  // The regression this exists for: five of the shell's menu entries fall back to a
+  // browser alert reading "Not supported in Webamp", which names the wrong product
+  // at somebody using this one. Three have handler options; two are hard-coded.
+  const dialogs: string[] = [];
+  page.on('dialog', async (dialog) => {
+    dialogs.push(dialog.message());
+    await dialog.dismiss();
+  });
+  const vibe = page.locator('.vibe-window');
+
+  await openPlaylistMenu(page, 'playlist-add-menu');
+  await page.locator('#playlist-add-menu .add-url').click();
+  await expect(vibe).toContainText('nothing to fetch from a URL');
+
+  await openPlaylistMenu(page, 'playlist-remove-menu');
+  await page.locator('#playlist-remove-menu .remove-misc').click();
+  await expect(vibe).toContainText('Remove misc is not part of vibeamp');
+
+  await openPlaylistMenu(page, 'playlist-misc-menu');
+  await page.locator('#playlist-misc-menu .file-info').click();
+  await expect(vibe).toContainText('File info is not part of vibeamp');
+
+  expect(dialogs).toEqual([]);
+});
+
+test('says what it did when asked to save an empty playlist', async ({ page }) => {
+  const dialogs: string[] = [];
+  page.on('dialog', async (dialog) => {
+    dialogs.push(dialog.message());
+    await dialog.dismiss();
+  });
+
+  await openPlaylistMenu(page, 'playlist-list-menu');
+  await page.locator('#playlist-list-menu .save-list').click();
+
+  await expect(page.locator('.vibe-window')).toContainText('nothing in the playlist to save');
+  expect(dialogs).toEqual([]);
+});
+
+test('asks for a file when told to load a playlist', async ({ page }) => {
+  const dialogs: string[] = [];
+  page.on('dialog', async (dialog) => {
+    dialogs.push(dialog.message());
+    await dialog.dismiss();
+  });
+
+  await openPlaylistMenu(page, 'playlist-list-menu');
+  const chooser = page.waitForEvent('filechooser');
+  await page.locator('#playlist-list-menu .load-list').click();
+
+  expect((await chooser).isMultiple()).toBe(false);
+  expect(dialogs).toEqual([]);
 });

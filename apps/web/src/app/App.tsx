@@ -15,9 +15,11 @@ import type { Services } from './services.js';
 import { connectFolder, readTagsInBackground } from './library.js';
 import type { FolderSource } from './library.js';
 import { folderFromDrop } from '../library/drop.js';
+import { buildM3u, matchEntry, parseM3u } from '../library/m3u.js';
 import { createHost, isSupported } from '../webamp/host.js';
 import type { WebampHost } from '../webamp/host.js';
 import { PlaylistBridge } from '../webamp/playlist.js';
+import { vibeWindowPosition } from '../webamp/layout.js';
 import { CrossfadeScheduler } from '../audio/CrossfadeScheduler.js';
 import { QueueController } from '../dj/queueController.js';
 import { AnalysisRunner } from '../analysis/runner.js';
@@ -25,6 +27,7 @@ import { DebugPanel, useDebugPanel } from '../ui/DebugPanel.jsx';
 import { OfflineNotice } from '../ui/OfflineNotice.jsx';
 import { loadSkins, promptForSkin, rememberSkin, saveSkin } from '../skin/skins.js';
 import type { LoadedSkins } from '../skin/skins.js';
+import type { Track as WebampTrack } from 'webamp';
 import {
   downloadBlob,
   exportLibrary,
@@ -95,6 +98,11 @@ export function App(): React.JSX.Element {
           await handleConnectFolder(folder);
           return true;
         },
+        onLoadPlaylist: () => handleLoadPlaylist(),
+        onSavePlaylist: (tracks) => handleSavePlaylist(tracks),
+        onAddUrl: () =>
+          setLibraryNotice('vibeamp plays your own files. There is nothing to fetch from a URL.'),
+        onUnsupported: (what) => setLibraryNotice(`${what} is not part of vibeamp.`),
         onTrackChange: (url) => {
           const current = runtime.current;
           if (current === undefined || current === null) return;
@@ -237,6 +245,88 @@ export function App(): React.JSX.Element {
     void runtime.current?.queue.replan();
   }, []);
 
+  /**
+   * Read an `.m3u` into the playlist.
+   *
+   * Entries are matched against the library rather than opened as paths: a browser
+   * cannot open a path, and a playlist written on another machine names none that
+   * exist here anyway. Whatever resolves is loaded and the rest is reported, which
+   * is more use than refusing the file.
+   */
+  const handleLoadPlaylist = useCallback(async (): Promise<WebampTrack[] | null> => {
+    const current = runtime.current;
+    if (current === null) return null;
+
+    const file = await promptForFile('.m3u,.m3u8,audio/x-mpegurl');
+    if (file === null) return null;
+
+    const entries = parseM3u(await file.text());
+    const tracks = await current.services.repository.allTracks();
+    const byRelPath = new Map(tracks.map((track) => [track.relPath, track]));
+    const byFileName = new Map(tracks.map((track) => [track.fileName, track]));
+
+    const queued = [];
+    let missing = 0;
+    for (const entry of entries) {
+      const track = matchEntry(entry, byRelPath, byFileName);
+      const resolved = track === null ? null : current.services.files.resolve(track);
+      if (track === null || resolved === null) {
+        missing++;
+        continue;
+      }
+      queued.push({ track, file: resolved });
+    }
+
+    if (queued.length === 0) {
+      setLibraryNotice(
+        entries.length === 0
+          ? 'That playlist is empty.'
+          : 'None of those tracks are in the connected folder.',
+      );
+      return null;
+    }
+
+    setLibraryNotice(
+      missing === 0
+        ? `Loaded ${queued.length} tracks.`
+        : `Loaded ${queued.length} tracks; ${missing} are not in the connected folder.`,
+    );
+    return current.bridge.register(queued);
+  }, []);
+
+  /** Write the shell's playlist out as an `.m3u`, with the paths from our library. */
+  const handleSavePlaylist = useCallback(async (tracks: readonly WebampTrack[]): Promise<void> => {
+    const current = runtime.current;
+    if (current === null) return;
+
+    const urls = tracks.map((track) => ('url' in track ? track.url : ''));
+    const ids = current.bridge.trackIdsFor(urls);
+    const known = await current.services.repository.getMany(
+      ids.filter((id): id is string => id !== null),
+    );
+    const byId = new Map(known.map((track) => [track.id, track]));
+
+    const rows = ids
+      .map((id) => (id === null ? null : byId.get(id)))
+      .filter((track): track is NonNullable<typeof track> => track !== undefined && track !== null)
+      .map((track) => ({
+        path: track.relPath,
+        durationSec: track.durationSec,
+        title:
+          track.meta.artist === null
+            ? (track.meta.title ?? track.fileName)
+            : `${track.meta.artist} - ${track.meta.title ?? track.fileName}`,
+      }));
+
+    if (rows.length === 0) {
+      setLibraryNotice('There is nothing in the playlist to save.');
+      return;
+    }
+
+    downloadBlob(new Blob([buildM3u(rows)], { type: 'audio/x-mpegurl' }), 'vibeamp.m3u');
+    setLibraryNotice(`Saved ${rows.length} tracks.`);
+  }, []);
+
   const handleCrossfadeChange = useCallback((seconds: number) => {
     useAppStore.getState().setCrossfade(seconds);
     runtime.current?.host.media.setCrossfadeSeconds(seconds);
@@ -351,16 +441,22 @@ export function App(): React.JSX.Element {
  * to the top-left corner on a screen too narrow to fit both.
  */
 function besideTheShell(): { x: number; y: number } {
-  const GAP = 14;
-  const PANEL_WIDTH = 277;
-
+  // Webamp centres its own windows, so where the panel goes is only known once the
+  // shell has rendered and the main window can be measured.
   const main = document.querySelector('#main-window');
-  if (main === null) return { x: 16, y: 16 };
+  return vibeWindowPosition(main === null ? null : main.getBoundingClientRect());
+}
 
-  const rect = main.getBoundingClientRect();
-  const x = rect.left - PANEL_WIDTH - GAP;
-  if (x < 8) return { x: 16, y: 16 };
-  return { x, y: rect.top };
+/** Ask the user for one file of a given kind. Resolves null if they dismiss it. */
+function promptForFile(accept: string): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.addEventListener('change', () => resolve(input.files?.[0] ?? null));
+    input.addEventListener('cancel', () => resolve(null));
+    input.click();
+  });
 }
 
 type StoreState = ReturnType<typeof useAppStore.getState>;

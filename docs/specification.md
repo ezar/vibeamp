@@ -53,12 +53,12 @@ audio, locally, free, with nothing to install.
 - Vibe sliders that replan the queue live.
 - Full persistence in IndexedDB, including resuming analysis after the tab is closed.
 - Real `.wsz` skin support, which comes with the shell.
+- MilkDrop visualisation, loaded on demand so it costs nothing until it is opened.
+- Reading and writing `.m3u` playlists.
 
 ### Explicitly out of version 1
 
 - CLAP, embeddings and free-text search. Version 2; version 1 leaves room for it.
-- MilkDrop visualisation. Webamp can load Butterchurn, so this is an option rather
-  than work.
 - A backend, user accounts, sync between devices.
 - Streaming, online radio, third-party services.
 - ID3 tag editing.
@@ -91,6 +91,20 @@ playlist. vibeamp supplies what is underneath it through two extension points.
 
 - `__customMediaClass` replaces Webamp's audio engine with `VibeampMedia`.
 - `filePickers` adds "Open folder…" to the shell's own menu.
+- `__butterchurnOptions` loads MilkDrop, through a dynamic import so the visualiser
+  and its presets stay out of the first load. They are two chunks of about 200 KB
+  each, fetched the first time the window is opened, and the base bundle is
+  unchanged.
+- `windowLayout` places the windows. Left to itself Webamp opens MilkDrop at the
+  main window's own position, so the visualiser lands on top of the transport, the
+  track title and the seek bar. The layout states the arrangement instead: the three
+  classic windows stacked, MilkDrop docked against the stack's right edge and eight
+  resize rows tall, which is exactly the height of the three it sits beside.
+
+Those positions are offsets inside a box that Webamp then centres in its container,
+not viewport coordinates — so the vibe window, which is not Webamp's, cannot be
+placed the same way. It is positioned against the main window's measured rectangle
+once the shell has rendered.
 
 The shell subscribes to six events — `timeupdate`, `ended`, `playing`, `waiting`,
 `stopWaiting`, `fileLoaded` — and drives the engine through its `IMedia` interface.
@@ -445,6 +459,10 @@ that it is not ready.
 
 The shell is Webamp's: three windows, docking, skins, hotkeys, the visualiser.
 
+MilkDrop opens from the shell's own menu, under Options. It is closed on arrival:
+the point of this player is the queue, and a visualiser nobody asked for is 400 KB
+and a WebGL context.
+
 ### The vibe window
 
 Five vertical sliders in the Winamp idiom — energy, brightness, danceability,
@@ -497,21 +515,19 @@ installed once as a PWA and then run offline, and worth measuring against
 
 ## Still open
 
-### Webamp features left unwired
+### Two of the shell's alerts cannot be reached properly
 
-Three of the shell's own menu entries call handlers this app does not supply, and
-Webamp's fallback for a missing one is a browser `alert` reading _"Not supported in
-Webamp"_ — which names the wrong product at the user.
+Five of Webamp's menu entries fall back to a browser `alert` reading _"Not supported
+in Webamp"_, which names the wrong product at somebody using this one. Three of them
+take a handler option and are answered properly: Load list and Save list read and
+write `.m3u`, and Add URL says that this player has nothing to fetch.
 
-| Entry                | Option                | What it should do                                                                                       |
-| -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
-| Playlist → Load list | `handleLoadListEvent` | Read an `.m3u` into the playlist                                                                        |
-| Playlist → Save list | `handleSaveListEvent` | Write the playlist as an `.m3u`                                                                         |
-| Play → URL           | `handleAddUrlEvent`   | Nothing useful: a local-first player has no use for a remote URL, so it should say so rather than alert |
-
-`requireButterchurnPresets` is unwired too, so there is no MilkDrop window. The
-shell can load Butterchurn, which is why version 1 of this document called that an
-option rather than work.
+The other two — Playlist → Remove misc and Playlist → File info — call `alert()`
+inline, with no option to pass. `createHost` takes the alert away for the width of
+the click and shows the notice in the vibe window instead. It works, and an e2e test
+holds it, but it reads the shell's own class names: a Webamp release that renames
+`.remove-misc` or `.file-info` puts both alerts back. Doing better means either a
+patch upstream or a fork, and neither is worth it for two menu entries.
 
 ### The eject button bypasses the library
 

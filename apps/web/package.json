@@ -15,6 +15,8 @@
     "@vibeamp/core": "workspace:*",
     "@vibeamp/dj": "workspace:*",
     "@vibeamp/dsp": "workspace:*",
+    "butterchurn": "^2.6.7",
+    "butterchurn-presets": "^2.4.7",
     "dexie": "^4.4.6",
     "music-metadata": "^11.9.0",
     "react": "^19.3.0",
