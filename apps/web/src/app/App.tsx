@@ -20,6 +20,7 @@ import { createHost, isSupported } from '../webamp/host.js';
 import type { WebampHost } from '../webamp/host.js';
 import { PlaylistBridge } from '../webamp/playlist.js';
 import { vibeWindowPosition } from '../webamp/layout.js';
+import { isNarrowNow, useIsNarrow } from '../ui/useIsNarrow.js';
 import { CrossfadeScheduler } from '../audio/CrossfadeScheduler.js';
 import { QueueController } from '../dj/queueController.js';
 import type { PlannedEntry } from '../dj/queueController.js';
@@ -62,6 +63,7 @@ export function App(): React.JSX.Element {
   const [libraryNotice, setLibraryNotice] = useState<string | null>(null);
   const [playingTrack, setPlayingTrack] = useState<Track | null>(null);
   const [upcoming, setUpcoming] = useState<readonly PlannedEntry[]>([]);
+  const narrow = useIsNarrow();
   const store = useAppStore();
   const debugOpen = useDebugPanel();
 
@@ -86,6 +88,10 @@ export function App(): React.JSX.Element {
 
       const host = await createHost({
         container,
+        // Read once: `windowLayout` is a construction option, so a viewport that
+        // changes later keeps the windows it opened with. Rotating a phone should
+        // not close the equaliser somebody deliberately opened.
+        narrow: isNarrowNow(),
         skins: skins.choices,
         initialSkin: skins.initial,
         openFolder: async () => {
@@ -156,7 +162,7 @@ export function App(): React.JSX.Element {
 
       const counts = await services.repository.counts();
       useAppStore.getState().setAnalysedCount(counts.done);
-      setPanelPosition(besideTheShell());
+      if (!isNarrowNow()) setPanelPosition(besideTheShell());
       setReady(true);
     })();
 
@@ -175,6 +181,35 @@ export function App(): React.JSX.Element {
     // Started once, deliberately. The shell owns its own DOM and must not be torn
     // down and rebuilt as React state changes.
   }, []);
+
+  /**
+   * Keep the panel beside the shell.
+   *
+   * Webamp re-centres its windows when the browser window changes size, so where
+   * the panel belongs is only knowable by measuring, and only after that has
+   * settled — hence the next frame rather than the handler itself.
+   *
+   * A phone gets none of this: there the panel is an ordinary block under the
+   * shell and the stylesheet places it.
+   */
+  useEffect(() => {
+    if (!ready || narrow) return undefined;
+
+    let frame = 0;
+    const place = (): void => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setPanelPosition(besideTheShell()));
+    };
+
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('orientationchange', place);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('orientationchange', place);
+    };
+  }, [ready, narrow]);
 
   /** Pick a folder, put it in the playlist, and start analysing it. */
   const handleConnectFolder = useCallback(async (source?: FolderSource) => {
@@ -437,6 +472,7 @@ export function App(): React.JSX.Element {
           nowPlaying={playingTrack}
           upcoming={upcoming}
           onApplyPreset={handleApplyPreset}
+          narrow={narrow}
           libraryNotice={libraryNotice}
         />
       )}
@@ -469,9 +505,13 @@ export function App(): React.JSX.Element {
  * only reliable way to sit beside it is to measure it once it is there. Falls back
  * to the top-left corner on a screen too narrow to fit both.
  */
+/**
+ * Where to put the vibe panel, measured rather than assumed.
+ *
+ * Webamp centres its own windows inside the node it rendered into, so this is only
+ * knowable once the shell exists.
+ */
 function besideTheShell(): { x: number; y: number } {
-  // Webamp centres its own windows, so where the panel goes is only known once the
-  // shell has rendered and the main window can be measured.
   const main = document.querySelector('#main-window');
   return vibeWindowPosition(main === null ? null : main.getBoundingClientRect());
 }
