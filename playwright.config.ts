@@ -40,8 +40,13 @@ export default defineConfig({
     // Built here rather than trusting whatever is in `dist`. The base path is a
     // build input, so a server left over from a run at a different base looks
     // healthy, answers every request and fails every asset.
+    //
+    // `--host 127.0.0.1` is load-bearing. Without it `vite preview` binds whatever
+    // `localhost` resolves to, which is IPv6 `::1` first on a GitHub runner, while
+    // the check below polls IPv4. The build then succeeds, nothing is logged, and
+    // the run dies on the web server timeout three minutes later.
     command:
-      'pnpm --filter @vibeamp/web build && pnpm --filter @vibeamp/web preview --port 4173 --strictPort',
+      'pnpm --filter @vibeamp/web build && pnpm --filter @vibeamp/web preview --port 4173 --strictPort --host 127.0.0.1',
     url: `http://127.0.0.1:4173${basePath}`,
     reuseExistingServer: false,
     timeout: 180_000,
