@@ -103,6 +103,24 @@ export interface RawFeatures {
 }
 
 /**
+ * The raw values the library-relative percentiles were computed from.
+ *
+ * Stored alongside the percentiles so that re-normalising is exact. Deriving them
+ * back out of the percentiles instead is lossy, and the loss compounds every time
+ * the library distribution shifts and everything is re-ranked.
+ */
+export interface NormalisationInputs {
+  /** Mean RMS over the analysed windows, in the sample unit. */
+  loudness: number;
+  /** Mean spectral centroid, in hertz. */
+  brightness: number;
+  /** Crest factor, as a ratio. */
+  compression: number;
+  /** Danceability proxy, 0..1. */
+  danceability: number;
+}
+
+/**
  * The descriptors the player and the DJ engine read.
  *
  * Every 0..1 value is a percentile within this library, not an absolute. A jazz
@@ -136,6 +154,8 @@ export interface TrackAnalysis {
    * says so instead of pretending the numbers are settled.
    */
   provisional: boolean;
+  /** What the percentiles were computed from, so they can be recomputed exactly. */
+  inputs: NormalisationInputs;
   windows: WindowFeatures[];
 }
 

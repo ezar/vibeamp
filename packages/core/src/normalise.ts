@@ -12,7 +12,7 @@
  * one track.
  */
 
-import type { RawFeatures, TrackAnalysis } from './types.js';
+import type { NormalisationInputs, RawFeatures, TrackAnalysis } from './types.js';
 import { toCamelot } from './camelot.js';
 
 /** Buckets per histogram. One per percentile. */
@@ -125,7 +125,7 @@ function linearIn(range: { min: number; max: number }, value: number): number {
 }
 
 /** The raw value each normalised descriptor is derived from. */
-export function descriptorInputs(raw: RawFeatures): Record<NormalisedDescriptor, number> {
+export function descriptorInputs(raw: RawFeatures): NormalisationInputs {
   return {
     loudness: raw.rmsMean,
     brightness: raw.centroidHzMean,
@@ -178,7 +178,34 @@ export function normaliseFeatures(raw: RawFeatures, statistics: LibraryStatistic
     compression: 1 - position('compression'),
     danceability: position('danceability'),
     provisional,
+    inputs,
     windows: raw.windows,
+  };
+}
+
+/**
+ * Recompute an analysis's percentiles against a distribution, exactly.
+ *
+ * Used when the library crosses the threshold where percentiles start to mean
+ * something, and after an import shifts the distribution. Reads the stored inputs,
+ * so it never needs the audio and never loses precision.
+ */
+export function renormalise(analysis: TrackAnalysis, statistics: LibraryStatistics): TrackAnalysis {
+  const provisional = statistics.loudness.total < MIN_TRACKS_FOR_PERCENTILES;
+  const inputs = analysis.inputs;
+
+  const position = (descriptor: NormalisedDescriptor): number =>
+    provisional
+      ? linearIn(DEFAULT_RANGES[descriptor], inputs[descriptor])
+      : percentileOf(statistics[descriptor], inputs[descriptor]);
+
+  return {
+    ...analysis,
+    energy: position('loudness'),
+    brightness: position('brightness'),
+    compression: 1 - position('compression'),
+    danceability: position('danceability'),
+    provisional,
   };
 }
 

@@ -38,6 +38,7 @@ export function makeTrack(spec: TrackSpec): Track {
     compression: 0.5,
     danceability: spec.danceability ?? 0.5,
     provisional: false,
+    inputs: { loudness: 0.2, brightness: 2000, compression: 5, danceability: 0.6 },
     windows: [],
   };
 

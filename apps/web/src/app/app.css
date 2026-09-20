@@ -1,0 +1,48 @@
+/* The page behind the shell. Webamp renders itself into `.app-shell`. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #1b1b22;
+  color: #c8c8d4;
+  font-family: Tahoma, 'MS Sans Serif', Geneva, sans-serif;
+  font-size: 11px;
+  overflow: hidden;
+}
+
+.app {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+}
+
+.app-shell {
+  width: 100%;
+  height: 100%;
+}
+
+.app-loading,
+.app-error {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  margin: 0;
+  max-width: 40ch;
+  line-height: 1.5;
+}
+
+.app-error {
+  color: #ff8888;
+}
+
+/*
+ * Below the width the three windows need, the shell is unusable as a set of draggable
+ * windows. The specification calls for a stacked layout there; until that exists the
+ * app says so rather than presenting something broken.
+ */
+@media (max-width: 640px) {
+  .app-shell {
+    overflow: auto;
+  }
+}

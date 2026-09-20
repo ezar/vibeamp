@@ -20,5 +20,6 @@ export {
   descriptorInputs,
   recordFeatures,
   normaliseFeatures,
+  renormalise,
 } from './normalise.js';
 export type { Histogram, LibraryStatistics, NormalisedDescriptor } from './normalise.js';

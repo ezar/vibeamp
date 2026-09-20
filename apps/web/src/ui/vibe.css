@@ -1,0 +1,130 @@
+/*
+ * The vibe window.
+ *
+ * Styled to sit beside Webamp's windows rather than inside them: Webamp owns its own
+ * DOM and its equaliser window has no slot for another tab, so the sliders live in a
+ * window of their own that matches the shell. See
+ * docs/decisions/0003-the-vibe-window-is-its-own-window.md.
+ */
+
+.vibe-window {
+  position: absolute;
+  /* Above the shell, which Webamp mounts at the end of <body> with its own
+     stacking context. Without this the panel sits underneath it. */
+  z-index: 20;
+  top: 16px;
+  left: 16px;
+  width: 275px;
+  font-family: Tahoma, 'MS Sans Serif', Geneva, sans-serif;
+  font-size: 9px;
+  color: #00ff00;
+  background: #2f2f3a;
+  border-top: 1px solid #5a5a6a;
+  border-left: 1px solid #5a5a6a;
+  border-right: 1px solid #16161c;
+  border-bottom: 1px solid #16161c;
+  user-select: none;
+}
+
+.vibe-titlebar {
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 14px;
+  padding: 0 4px;
+  background: linear-gradient(#4a4a5c, #32323e);
+  color: #c8c8d4;
+  letter-spacing: 1px;
+  cursor: move;
+}
+
+.vibe-body {
+  padding: 8px;
+}
+
+.vibe-sliders {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.vibe-slider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+/*
+ * Vertical range inputs. `writing-mode: vertical-lr` with `direction: rtl` is the
+ * modern way; the WebKit appearance is kept as a fallback for older Safari.
+ */
+.vibe-slider input[type='range'] {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  -webkit-appearance: slider-vertical;
+  width: 16px;
+  height: 62px;
+  accent-color: #00ff00;
+}
+
+.vibe-slider label {
+  color: #8ce68c;
+  text-transform: lowercase;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.vibe-readout {
+  color: #c8c8d4;
+  font-variant-numeric: tabular-nums;
+}
+
+.vibe-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.vibe-row select,
+.vibe-row button {
+  font-family: inherit;
+  font-size: 9px;
+  color: #c8c8d4;
+  background: #3a3a48;
+  border-top: 1px solid #5a5a6a;
+  border-left: 1px solid #5a5a6a;
+  border-right: 1px solid #16161c;
+  border-bottom: 1px solid #16161c;
+  padding: 2px 6px;
+}
+
+.vibe-row button:disabled {
+  color: #6a6a78;
+}
+
+.vibe-status {
+  margin-top: 8px;
+  color: #8ce68c;
+  line-height: 1.4;
+}
+
+.vibe-status .vibe-warning {
+  color: #ffcc44;
+}
+
+.vibe-progress {
+  height: 6px;
+  margin-top: 4px;
+  background: #16161c;
+  border: 1px solid #5a5a6a;
+}
+
+.vibe-progress span {
+  display: block;
+  height: 100%;
+  background: #00ff00;
+}
