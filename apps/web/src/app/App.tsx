@@ -18,6 +18,7 @@ import { folderFromDrop } from '../library/drop.js';
 import { createHost, isSupported } from '../webamp/host.js';
 import type { WebampHost } from '../webamp/host.js';
 import { PlaylistBridge } from '../webamp/playlist.js';
+import { CrossfadeScheduler } from '../audio/CrossfadeScheduler.js';
 import { QueueController } from '../dj/queueController.js';
 import { AnalysisRunner } from '../analysis/runner.js';
 import { DebugPanel, useDebugPanel } from '../ui/DebugPanel.jsx';
@@ -45,6 +46,7 @@ export function App(): React.JSX.Element {
     queue: QueueController;
     runner: AnalysisRunner | null;
     skins: LoadedSkins;
+    crossfade: CrossfadeScheduler;
   } | null>(null);
 
   const [ready, setReady] = useState(false);
@@ -122,7 +124,17 @@ export function App(): React.JSX.Element {
         };
       });
 
-      runtime.current = { services, host, bridge, queue, runner: null, skins };
+      // Advancing early is what makes the cross-fade apply to ordinary playback:
+      // the shell moves on while there is still audio to fade out of, instead of
+      // after `ended`, when the element already reports itself paused.
+      const crossfade = new CrossfadeScheduler({
+        media: host.media,
+        advance: () => host.webamp.nextTrack(),
+        hasNext: () => bridge.remainingAfter(host.media.currentUrl()) > 0,
+      });
+      crossfade.start();
+
+      runtime.current = { services, host, bridge, queue, runner: null, skins, crossfade };
       host.media.setCrossfadeSeconds(useAppStore.getState().crossfadeSec);
 
       const counts = await services.repository.counts();
@@ -135,6 +147,7 @@ export function App(): React.JSX.Element {
       disposed = true;
       const current = runtime.current;
       current?.runner?.stop();
+      current?.crossfade.stop();
       current?.skins.dispose();
       current?.bridge.dispose();
       current?.host.dispose();
@@ -224,6 +237,11 @@ export function App(): React.JSX.Element {
     void runtime.current?.queue.replan();
   }, []);
 
+  const handleCrossfadeChange = useCallback((seconds: number) => {
+    useAppStore.getState().setCrossfade(seconds);
+    runtime.current?.host.media.setCrossfadeSeconds(seconds);
+  }, []);
+
   /** Load a `.wsz` the user brings. The app ships none of its own. */
   const handleLoadSkin = useCallback(async () => {
     const current = runtime.current;
@@ -293,6 +311,8 @@ export function App(): React.JSX.Element {
           progress={analysisFraction(store)}
           onChange={store.setVibe}
           onCommit={handleCommit}
+          crossfadeSec={store.crossfadeSec}
+          onCrossfadeChange={handleCrossfadeChange}
           onShapeChange={store.setEnergyShape}
           onToggleAutoDj={handleToggleAutoDj}
           onLoadSkin={() => void handleLoadSkin()}

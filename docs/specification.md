@@ -495,26 +495,58 @@ The production bundle is about 1.4 MB, 440 KB compressed. Acceptable for somethi
 installed once as a PWA and then run offline, and worth measuring against
 `webamp/lazy` before version 1 ships.
 
+## Still open
+
+### Webamp features left unwired
+
+Three of the shell's own menu entries call handlers this app does not supply, and
+Webamp's fallback for a missing one is a browser `alert` reading _"Not supported in
+Webamp"_ — which names the wrong product at the user.
+
+| Entry                | Option                | What it should do                                                                                       |
+| -------------------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
+| Playlist → Load list | `handleLoadListEvent` | Read an `.m3u` into the playlist                                                                        |
+| Playlist → Save list | `handleSaveListEvent` | Write the playlist as an `.m3u`                                                                         |
+| Play → URL           | `handleAddUrlEvent`   | Nothing useful: a local-first player has no use for a remote URL, so it should say so rather than alert |
+
+`requireButterchurnPresets` is unwired too, so there is no MilkDrop window. The
+shell can load Butterchurn, which is why version 1 of this document called that an
+option rather than work.
+
+### The eject button bypasses the library
+
+It calls Webamp's own file picker, so tracks are added straight to the playlist
+without passing through the scanner: they play, but are never hashed or analysed,
+and the auto-DJ stays at zero. Redirecting it means intercepting a minified Redux
+action, which breaks on every Webamp release, so it is left alone. The answer was
+to make the real entry point impossible to miss instead.
+
+### Measured against a real library
+
+Cold start, analysis throughput, heap behaviour over a thousand tracks, and whether
+the visualiser really stops when the tab is hidden. All of it needs a real library
+and a real machine, and none of it is claimed here.
+
 ## Acceptance criteria
 
 Version 1 is finished when all of the following hold. The state of each is recorded
 honestly.
 
-| #   | Criterion                                                           | State                                            |
-| --- | ------------------------------------------------------------------- | ------------------------------------------------ |
-| 1   | A 1,000 track folder listed in under 30 s                           | Needs a real library                             |
-| 2   | Play, pause, seek and skip with no audible clicks                   | Needs listening                                  |
-| 2b  | Crossfade between consecutive tracks                                | **Not met**: manual skips only, see "Still open" |
-| 3   | Moving an equaliser band is audible at once, with no artefacts      | Ramped, needs listening                          |
-| 4   | Analysis resumes exactly where it stopped after a reload            | **Covered by tests**                             |
-| 5   | A renamed file is not re-analysed                                   | **Covered by tests**                             |
-| 6   | Auto-DJ returns 20 tracks from 20,000 in under 100 ms               | **Covered by tests**                             |
-| 7   | Consecutive tempos within 10 per cent in 80 per cent of transitions | **Covered by tests**                             |
-| 8   | The energy slider audibly reorders the queue                        | **Covered by tests**                             |
-| 9   | The visualiser stops when the tab is hidden                         | Webamp's, needs profiling                        |
-| 10  | Analysing 1,000 tracks does not grow the heap monotonically         | Needs a real library                             |
-| 11  | Works in Firefox through the fallback picker                        | Implemented, needs Firefox                       |
-| 12  | Installed as a PWA, starts with no network                          | Built, needs verifying                           |
+| #   | Criterion                                                           | State                                           |
+| --- | ------------------------------------------------------------------- | ----------------------------------------------- |
+| 1   | A 1,000 track folder listed in under 30 s                           | Needs a real library                            |
+| 2   | Play, pause, seek and skip with no audible clicks                   | Needs listening                                 |
+| 2b  | Crossfade between consecutive tracks                                | **Covered by tests**; the sound needs listening |
+| 3   | Moving an equaliser band is audible at once, with no artefacts      | Ramped, needs listening                         |
+| 4   | Analysis resumes exactly where it stopped after a reload            | **Covered by tests**                            |
+| 5   | A renamed file is not re-analysed                                   | **Covered by tests**                            |
+| 6   | Auto-DJ returns 20 tracks from 20,000 in under 100 ms               | **Covered by tests**                            |
+| 7   | Consecutive tempos within 10 per cent in 80 per cent of transitions | **Covered by tests**                            |
+| 8   | The energy slider audibly reorders the queue                        | **Covered by tests**                            |
+| 9   | The visualiser stops when the tab is hidden                         | Webamp's, needs profiling                       |
+| 10  | Analysing 1,000 tracks does not grow the heap monotonically         | Needs a real library                            |
+| 11  | Works in Firefox through the fallback picker                        | Implemented, needs Firefox                      |
+| 12  | Installed as a PWA, starts with no network                          | Built, needs verifying                          |
 
 ### Build order
 

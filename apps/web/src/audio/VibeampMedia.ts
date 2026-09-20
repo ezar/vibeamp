@@ -186,12 +186,11 @@ export class VibeampMedia {
    * goes onto the idle deck and the two are ramped past each other. Otherwise it
    * replaces what is on the active deck.
    *
-   * **This only fades on a manual skip.** On ordinary advance the shell asks for the
-   * next track after the current one emits `ended`, and an ended element reports
-   * itself paused, so there is no outgoing audio left to fade out of and consecutive
-   * tracks play back to back. Fading there means starting the next track before the
-   * current one finishes, which is a decision about what drives playback rather than
-   * a change to this method; it is recorded as open in the specification.
+   * Ordinary advance reaches here with audio still playing because
+   * {@link CrossfadeScheduler} moves the shell on a cross-fade *before* the end.
+   * Left to itself the shell asks for the next track after `ended`, and an ended
+   * element reports itself paused — so there would be nothing to fade out of, and
+   * only a manual skip would ever fade.
    */
   async loadFromUrl(url: string, autoPlay: boolean): Promise<void> {
     const playing = !this.current.element.paused && this.current.element.currentTime > 0;
@@ -221,6 +220,17 @@ export class VibeampMedia {
   }
 
   // ---- vibeamp's own surface ----
+
+  /**
+   * The URL on the active deck, or `null` before anything has loaded.
+   *
+   * The cross-fade scheduler needs it to tell one track from the next: it has to
+   * arm itself once per track, and the only thing that changes between them here
+   * is what is loaded.
+   */
+  currentUrl(): string | null {
+    return this.current.url;
+  }
 
   /** @param seconds 0 to {@link MAX_CROSSFADE_SEC}. 0 plays tracks back to back. */
   setCrossfadeSeconds(seconds: number): void {
