@@ -26,6 +26,22 @@ export class PlaylistBridge {
 
   constructor(private readonly webamp: Webamp) {}
 
+  /**
+   * Turn tracks into shell tracks and record their URLs, without queueing them.
+   *
+   * What "Load list" needs: Webamp replaces its own playlist with whatever the
+   * handler returns, so the tracks have to be registered here first or the shell
+   * plays URLs this bridge cannot map back to anything.
+   */
+  register(entries: readonly QueuedEntry[]): WebampTrack[] {
+    return entries.map((entry) => this.toWebampTrack(entry));
+  }
+
+  /** Our track id for each entry of the shell's playlist, in order. */
+  trackIdsFor(urls: readonly string[]): Array<string | null> {
+    return urls.map((url) => this.trackIdByUrl.get(url) ?? null);
+  }
+
   /** Add tracks to the end of the shell's playlist. */
   append(entries: readonly QueuedEntry[]): void {
     if (entries.length === 0) return;

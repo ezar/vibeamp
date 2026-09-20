@@ -36,7 +36,11 @@ per track.
   dockable windows, the ten-band equaliser on Winamp's own frequencies, the spectrum
   analyser, the hotkeys, and any `.wsz` skin you already have. Load one and it is
   kept, and it joins the shell's own skin menu. None ship with the app — classic
-  skins belong to the people who made them.
+  skins belong to the people who made them. MilkDrop is there too, under Options,
+  fetched the first time you open it so it costs nothing until you want it.
+- **Reads and writes `.m3u`.** Load list and Save list in the playlist window do
+  what they say. A loaded list is matched against your library by path, so the
+  descriptors you already have come with it.
 - **Lets you take your library with you.** Export the whole index, descriptors
   included, as one JSON file. Import it on another machine and nothing is analysed
   twice: tracks are matched by what is in them, not by where they are.

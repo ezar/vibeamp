@@ -17,9 +17,11 @@
  */
 
 import Webamp from 'webamp';
-import type { Options, Track as WebampTrack } from 'webamp';
+import type { ButterchurnOptions, Options, Track as WebampTrack } from 'webamp';
 import { VibeampMedia } from '../audio/VibeampMedia.js';
+import { shellLayout } from './layout.js';
 import type { SkinChoice } from '../skin/skins.js';
+import type { Track as WebampTrackType } from 'webamp';
 
 export interface HostOptions {
   /** Opens the folder picker and returns what it found, or `null` if cancelled. */
@@ -40,7 +42,32 @@ export interface HostOptions {
   skins?: readonly SkinChoice[];
   /** The skin to start in, or nothing for Webamp's built-in default. */
   initialSkin?: SkinChoice | undefined;
+  /** Reads an `.m3u` the user picks into the playlist. */
+  onLoadPlaylist?: () => Promise<WebampTrackType[] | null>;
+  /** Writes the shell's playlist out as an `.m3u`. */
+  onSavePlaylist?: (tracks: readonly WebampTrackType[]) => Promise<void>;
+  /** Called when the user asks to add a URL, which this player has no use for. */
+  onAddUrl?: () => void;
+  /**
+   * Called when the user picks a menu entry the shell has no handler hook for.
+   *
+   * @param what The entry's name, as the menu draws it.
+   */
+  onUnsupported?: (what: string) => void;
 }
+
+/**
+ * The menu entries whose "Not supported in Webamp" alert is hard-coded.
+ *
+ * The other three have handler options and are answered properly above. These two
+ * call `alert()` inline, so the only way to keep the wrong product's name off the
+ * screen is to take the alert away for the length of the click. Keyed by the class
+ * Webamp puts on the entry.
+ */
+const UNHOOKED_ENTRIES: ReadonlyArray<readonly [selector: string, name: string]> = [
+  ['.remove-misc', 'Remove misc'],
+  ['.file-info', 'File info'],
+];
 
 export interface WebampHost {
   webamp: Webamp;
@@ -69,9 +96,15 @@ export async function createHost(options: HostOptions): Promise<WebampHost> {
     }
   }
 
-  const webampOptions: Options & { __customMediaClass?: typeof CapturedMedia } = {
+  const webampOptions: Options & {
+    __customMediaClass?: typeof CapturedMedia;
+    __butterchurnOptions?: ButterchurnOptions;
+  } = {
     enableHotkeys: true,
     enableMediaSession: true,
+    // Without a layout of its own, Webamp opens MilkDrop over the main window and
+    // buries the transport under the visualiser.
+    windowLayout: shellLayout(),
     // Webamp mounts itself at the end of <body> rather than inside the node it is
     // given, so the vibe window's place in the stack has to be settled explicitly.
     zIndex: 10,
@@ -96,6 +129,48 @@ export async function createHost(options: HostOptions): Promise<WebampHost> {
     // Object URLs are same-origin, so the CORS warning on this option does not
     // apply: the skin never leaves the device it was loaded from.
     ...(options.initialSkin !== undefined ? { initialSkin: { url: options.initialSkin.url } } : {}),
+    // Without these three, Webamp's fallback for a missing handler is a browser
+    // alert reading "Not supported in Webamp", which names the wrong product at
+    // somebody using this one.
+    handleLoadListEvent: async () => (await options.onLoadPlaylist?.()) ?? null,
+    handleSaveListEvent: async (tracks) => {
+      await options.onSavePlaylist?.(tracks);
+      return null;
+    },
+    handleAddUrlEvent: () => {
+      // Returning null is what stops the alert. There is nothing to fetch: this
+      // player reads the user's own files, and the interface says so instead.
+      options.onAddUrl?.();
+      return null;
+    },
+    /**
+     * MilkDrop, loaded only when it is opened.
+     *
+     * Webamp also publishes a `webamp/butterchurn` entry point with the visualiser
+     * built in, but that bundle is 2 MB against 920 KB for this one and the choice
+     * is made at construction. Going through the import hook instead keeps the
+     * visualiser out of the first load of a player that promises to start offline.
+     */
+    __butterchurnOptions: {
+      // Unwrapped, because butterchurn predates modules: the import gives a
+      // namespace whose `default` holds the library, and Webamp calls
+      // `createVisualizer` on whatever this resolves to.
+      importButterchurn: async () => {
+        const module = await import('butterchurn');
+        return module.default ?? module;
+      },
+      getPresets: async () => {
+        const module = await import('butterchurn-presets/lib/butterchurnPresetsMinimal.min.js');
+        const presets: Record<string, object> =
+          (module as { default?: Record<string, object> }).default ??
+          (module as unknown as Record<string, object>);
+        return Object.entries(presets).map(([name, butterchurnPresetObject]) => ({
+          name,
+          butterchurnPresetObject,
+        }));
+      },
+      butterchurnOpen: false,
+    },
     __customMediaClass: CapturedMedia,
   };
 
@@ -104,6 +179,21 @@ export async function createHost(options: HostOptions): Promise<WebampHost> {
     options.onTrackChange?.(info?.url ?? null);
   });
 
+  // Runs before the click reaches the shell, which dispatches the alert from its own
+  // handler on the same event. Nothing else in this app calls alert(), and the swap
+  // is undone on the next task, so the window is one click wide.
+  const swallowUnhookedAlert = (event: MouseEvent): void => {
+    const name = entryClickedIn(event);
+    if (name === null) return;
+
+    const original = window.alert;
+    window.alert = () => options.onUnsupported?.(name);
+    setTimeout(() => {
+      window.alert = original;
+    }, 0);
+  };
+  document.addEventListener('click', swallowUnhookedAlert, { capture: true });
+
   await webamp.renderWhenReady(options.container);
   if (media === null) throw new Error('Webamp did not construct the media class');
 
@@ -111,8 +201,20 @@ export async function createHost(options: HostOptions): Promise<WebampHost> {
     webamp,
     media,
     dispose: () => {
+      document.removeEventListener('click', swallowUnhookedAlert, { capture: true });
       unsubscribe();
       webamp.dispose();
     },
   };
+}
+
+/** Which unhooked menu entry a click landed on, or null for anything else. */
+function entryClickedIn(event: MouseEvent): string | null {
+  const target = event.target;
+  if (!(target instanceof Element)) return null;
+
+  for (const [selector, name] of UNHOOKED_ENTRIES) {
+    if (target.closest(selector) !== null) return name;
+  }
+  return null;
 }

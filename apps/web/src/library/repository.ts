@@ -190,6 +190,11 @@ export class LibraryRepository {
     return statistics;
   }
 
+  /** Every track in the library, whatever its status. */
+  async allTracks(): Promise<Track[]> {
+    return this.db.tracks.toArray();
+  }
+
   async allAnalysed(): Promise<Track[]> {
     return this.db.tracks.where('status').equals('done').toArray();
   }
