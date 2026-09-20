@@ -22,3 +22,7 @@ export {
 export type { QueueContext, ScoreWeights } from './scoring.js';
 export { planQueue, canAutoDj, MIN_ANALYSED_TRACKS, SHORTLIST_SIZE } from './queue.js';
 export type { PlanOptions, PlannedTrack } from './queue.js';
+export { explainTransition, keyRelationLabel } from './explain.js';
+export type { KeyRelation, Transition } from './explain.js';
+export { VIBE_PRESETS } from './presets.js';
+export type { VibePreset } from './presets.js';

@@ -15,10 +15,25 @@
  */
 
 import { useCallback } from 'react';
-import type { EnergyShape, VibeTarget } from '@vibeamp/core';
-import { ENERGY_SHAPE_LABELS, MIN_ANALYSED_TRACKS } from '@vibeamp/dj';
+import type { EnergyShape, Track, VibeTarget } from '@vibeamp/core';
+import {
+  ENERGY_SHAPE_LABELS,
+  MIN_ANALYSED_TRACKS,
+  VIBE_PRESETS,
+  explainTransition,
+} from '@vibeamp/dj';
+import type { VibePreset } from '@vibeamp/dj';
 import { useDraggable } from './useDraggable.js';
 import './vibe.css';
+
+/**
+ * How much of the queue to show.
+ *
+ * Four. The plan is twenty deep, but this window is 277px wide and sits beside a
+ * player, not in place of one — and past the fourth track a slider move will have
+ * rewritten the list anyway.
+ */
+const QUEUE_PREVIEW = 4;
 
 /** Cross-fade lengths the window offers, in seconds. */
 const CROSSFADE_CHOICES = [0, 2, 4, 6, 8, 12] as const;
@@ -65,8 +80,21 @@ export interface VibePanelProps {
   onImport: () => void;
   /** Open or close MilkDrop. The shell's own entry for it is three levels down. */
   onToggleMilkdrop: () => void;
+  /** What is playing, for the transition into the first queued track. */
+  nowPlaying: Track | null;
+  /** What the auto-DJ has lined up, nearest first. Empty when it is switched off. */
+  upcoming: readonly UpcomingTrack[];
+  /** Set every slider and the curve at once. */
+  onApplyPreset: (preset: VibePreset) => void;
   /** Result of the last export or import, shown for a moment. */
   libraryNotice: string | null;
+}
+
+/** One entry of the queue, as the window needs it. */
+export interface UpcomingTrack {
+  track: Track;
+  /** What the energy curve asked for at this position, 0..1. */
+  targetEnergy: number;
 }
 
 export function VibePanel({
@@ -89,10 +117,20 @@ export function VibePanel({
   onExport,
   onImport,
   onToggleMilkdrop,
+  nowPlaying,
+  upcoming,
+  onApplyPreset,
   libraryNotice,
 }: VibePanelProps): React.JSX.Element {
   const ready = analysedCount >= MIN_ANALYSED_TRACKS;
   const { position, handleProps } = useDraggable(initialPosition);
+  const queue = upcoming.slice(0, QUEUE_PREVIEW);
+  // Only the imminent move is explained. The ones after it are planned from a
+  // target the listener is still moving, so describing them would be a promise the
+  // next slider release breaks.
+  const first = queue[0];
+  const transition =
+    nowPlaying !== null && first !== undefined ? explainTransition(nowPlaying, first.track) : null;
 
   const handleInput = useCallback(
     (key: keyof VibeTarget, value: string) => {
@@ -148,6 +186,24 @@ export function VibePanel({
           ))}
         </div>
 
+        <div className="vibe-row vibe-row--presets">
+          <label>vibe</label>
+          <div className="vibe-actions">
+            {VIBE_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                className="vibe-button"
+                disabled={!ready}
+                title={preset.title}
+                onClick={() => onApplyPreset(preset)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="vibe-row">
           <label htmlFor="vibe-shape">curve</label>
           <select
@@ -180,6 +236,25 @@ export function VibePanel({
             AUTO-DJ
           </button>
         </div>
+
+        {queue.length > 0 && (
+          <div className="vibe-queue">
+            <div className="vibe-queue-head">
+              <span>next up</span>
+              {transition !== null && (
+                <span title="the move into the first track">{transition.summary}</span>
+              )}
+            </div>
+            <ol>
+              {queue.map((entry, index) => (
+                <li key={`${entry.track.id}-${index}`}>
+                  <span className="vibe-queue-title">{titleOf(entry.track)}</span>
+                  <span className="vibe-queue-meta">{metaOf(entry.track)}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
 
         <div className="vibe-row vibe-row--secondary">
           <label htmlFor="vibe-fade">fade</label>
@@ -259,4 +334,17 @@ export function VibePanel({
       </div>
     </div>
   );
+}
+
+/** What to call a track: its tag, or the file name with the extension dropped. */
+function titleOf(track: Track): string {
+  return track.meta.title ?? track.fileName.replace(/\.[^.]+$/, '');
+}
+
+/** Tempo and key, the two numbers a transition turns on. */
+function metaOf(track: Track): string {
+  const analysis = track.analysis;
+  if (analysis === null) return '';
+  const bpm = analysis.bpm > 0 ? `${Math.round(analysis.bpm)}` : '--';
+  return `${bpm} · ${analysis.key.camelot}`;
 }
