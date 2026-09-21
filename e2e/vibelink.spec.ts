@@ -26,11 +26,20 @@ const SHARED = encodeVibe({
   shape: 'winddown',
 });
 
-/** The slider values a page is showing, in the order the window draws them. */
+/**
+ * The slider values a page is showing, in the order the window draws them.
+ *
+ * Waits for the first fader rather than trusting that `#main-window` being visible
+ * means the vibe window exists. It does not: `#main-window` is Webamp's, and the
+ * shell is built before the panel beside it mounts. Under load that gap is wide
+ * enough to read an empty list of sliders and call it a mismatch.
+ */
 async function faders(page: Page): Promise<number[]> {
-  return page
-    .locator('.vibe-window input[type=range]')
-    .evaluateAll((inputs) => inputs.map((input) => Number((input as HTMLInputElement).value)));
+  const inputs = page.locator('.vibe-window input[type=range]');
+  await inputs.first().waitFor();
+  return inputs.evaluateAll((elements) =>
+    elements.map((input) => Number((input as HTMLInputElement).value)),
+  );
 }
 
 test('opens with the sliders a link asked for', async ({ page }) => {

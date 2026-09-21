@@ -82,6 +82,8 @@ export interface VibePanelProps {
   onToggleMilkdrop: () => void;
   /** Copy a link that carries these slider positions and nothing else. */
   onCopyVibeLink: () => void;
+  /** Open the window that shows what the collection looks like from the inside. */
+  onOpenLibrary: () => void;
   /** What is playing, for the transition into the first queued track. */
   nowPlaying: Track | null;
   /** What the auto-DJ has lined up, nearest first. Empty when it is switched off. */
@@ -125,6 +127,7 @@ export function VibePanel({
   onImport,
   onToggleMilkdrop,
   onCopyVibeLink,
+  onOpenLibrary,
   nowPlaying,
   upcoming,
   onApplyPreset,
@@ -296,6 +299,15 @@ export function VibePanel({
               title="Copy a link to these slider positions. It carries no music, and it works on somebody else's library."
             >
               Link
+            </button>
+            <button
+              type="button"
+              className="vibe-button"
+              onClick={onOpenLibrary}
+              disabled={!hasLibrary}
+              title="What this collection looks like in tempo and key, and which files hold the same recording"
+            >
+              X-ray
             </button>
             <button
               type="button"

@@ -8,6 +8,7 @@
 
 import {
   Spectrogram,
+  CHROMA_FRAME_SIZE,
   chromaSequence,
   chromaVector,
   crestFactor,
@@ -180,8 +181,14 @@ function measureWindow(
  * single window is divided into that many, which keeps every fingerprint the same
  * shape and keeps two tracks of the same length sampling the same moments.
  *
- * @returns Null when the windows cannot fill the shape, rather than a fingerprint
- *   that is partly zeros and would match every other partly zero one.
+ * A frame shorter than one chroma FFT window yields zeros, and a fingerprint of
+ * zeros is not a weak fingerprint — it is a blank one that would sit at distance
+ * zero from every other blank one. So a track too short to fill the shape gets no
+ * fingerprint at all. At the analysis rate that floor is about fifteen seconds,
+ * which is an interlude or a sound effect rather than a recording anyone keeps two
+ * copies of.
+ *
+ * @returns Null when the windows cannot fill the shape.
  */
 function buildFingerprint(
   samples: Float32Array,
@@ -202,6 +209,10 @@ function buildFingerprint(
       segments.push({ offset, length: next - offset, startSec: offset / sampleRate });
     }
   }
+
+  // Checked before any work: every segment must afford a full FFT window per frame.
+  const shortest = Math.min(...segments.map((segment) => segment.length));
+  if (shortest < FINGERPRINT_FRAMES * CHROMA_FRAME_SIZE) return null;
 
   const frames: number[][] = [];
   for (const segment of segments) {

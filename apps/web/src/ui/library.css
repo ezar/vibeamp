@@ -1,0 +1,345 @@
+/*
+ * The library window.
+ *
+ * The same instrument as the vibe window — same bevels, same green display type,
+ * same drawn title bar — but twice as wide, because a wheel and a histogram at
+ * 275px are decoration rather than information. Two Winamp windows side by side is
+ * a shape Winamp itself had, so it still reads as part of the stack.
+ *
+ * It reuses the vibe window's custom properties rather than redefining them: one
+ * of these two drifting to a different grey would show immediately, since they sit
+ * next to each other.
+ */
+
+.library-window {
+  position: absolute;
+  z-index: 30;
+  box-sizing: border-box;
+  /* Two classic windows wide, plus the seam between them. */
+  width: 551px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  font-family: Tahoma, 'MS Sans Serif', Geneva, sans-serif;
+  font-size: 9px;
+  color: var(--vibe-text);
+  background: var(--vibe-face);
+  border-top: 1px solid var(--vibe-light);
+  border-left: 1px solid var(--vibe-light);
+  border-right: 1px solid var(--vibe-shadow);
+  border-bottom: 1px solid var(--vibe-shadow);
+  user-select: none;
+}
+
+.library-titlebar {
+  /* The close box is placed against this, not against the window: on a phone the
+     window is a static block in the page, and an absolute child of it would go
+     looking for the nearest positioned ancestor and land in the page margin. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: none;
+  height: 20px;
+  padding: 0 4px;
+  touch-action: none;
+  cursor: move;
+  background: linear-gradient(#54546a, #34344a);
+  color: #d8d8e4;
+  font-size: 8px;
+  letter-spacing: 2px;
+}
+
+.library-titlebar::before,
+.library-titlebar::after {
+  content: '';
+  flex: 1;
+  height: 10px;
+  min-width: 10px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--vibe-title-line) 0 1px,
+    transparent 1px 2px,
+    var(--vibe-title-shade) 2px 3px,
+    transparent 3px 4px
+  );
+}
+
+.library-title {
+  white-space: nowrap;
+}
+
+/* Winamp's close box: a small square at the right end of the title bar. */
+.library-close {
+  position: absolute;
+  right: 4px;
+  width: 15px;
+  height: 13px;
+  padding: 0;
+  line-height: 1;
+  font-size: 11px;
+  color: var(--vibe-text);
+  background: linear-gradient(var(--vibe-face), var(--vibe-face-dark));
+  border-top: 1px solid var(--vibe-light);
+  border-left: 1px solid var(--vibe-light);
+  border-right: 1px solid var(--vibe-shadow);
+  border-bottom: 1px solid var(--vibe-shadow);
+  cursor: pointer;
+}
+
+.library-close:active {
+  border-color: var(--vibe-shadow) var(--vibe-light) var(--vibe-light) var(--vibe-shadow);
+}
+
+.library-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px;
+  /* Two columns: the wheel on the right, everything that is a list or a row of
+     bars stacked on the left. The wheel is nearly square and twice the height of
+     the tempo chart, so giving it a column of its own is what stops the left one
+     ending in a hand's width of nothing. */
+  display: grid;
+  grid-template-columns: 1fr 216px;
+  gap: 10px 14px;
+  align-content: start;
+  align-items: start;
+}
+
+/*
+ * Each column is one element rather than several grid items, so the two stack
+ * independently. Left to the grid, the tempo chart and the wheel would share a row
+ * whose height is the wheel's, and everything under the chart would start a hand's
+ * width below where it should.
+ */
+.library-column > .library-section + .library-section {
+  margin-top: 12px;
+}
+
+.library-findings,
+.library-body > .library-note {
+  grid-column: 1 / -1;
+}
+
+.library-findings {
+  margin: 0;
+  padding: 7px 7px 7px 20px;
+  background: var(--vibe-well);
+  border-top: 1px solid var(--vibe-shadow);
+  border-left: 1px solid var(--vibe-shadow);
+  border-right: 1px solid var(--vibe-light);
+  border-bottom: 1px solid var(--vibe-light);
+  color: var(--vibe-display);
+  line-height: 1.7;
+}
+
+.library-section h3 {
+  margin: 0 0 6px;
+  font-size: 8px;
+  font-weight: normal;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--vibe-display);
+}
+
+.library-note {
+  margin: 4px 0 0;
+  line-height: 1.6;
+}
+
+.library-legend {
+  margin: 5px 0 0;
+  line-height: 1.5;
+  color: var(--vibe-light);
+}
+
+/* ---- tempo ---- */
+
+.library-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 96px;
+  padding: 4px;
+  background: var(--vibe-well);
+  border-top: 1px solid var(--vibe-shadow);
+  border-left: 1px solid var(--vibe-shadow);
+  border-right: 1px solid var(--vibe-light);
+  border-bottom: 1px solid var(--vibe-light);
+}
+
+.library-bar {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.library-bar span {
+  width: 100%;
+  background: linear-gradient(var(--vibe-display), var(--vibe-display-dim));
+}
+
+.library-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  color: var(--vibe-light);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the wheel ---- */
+
+.library-wheel {
+  display: block;
+  width: 100%;
+  max-width: 190px;
+  margin: 0 auto;
+}
+
+.library-wheel-label {
+  fill: #0d0d12;
+  font-size: 11px;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.library-wheel-centre {
+  fill: var(--vibe-display);
+  font-size: 15px;
+  text-anchor: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+.library-wheel-centre--small {
+  fill: var(--vibe-light);
+  font-size: 8px;
+}
+
+/* ---- years ---- */
+
+.library-decades {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library-decades li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.9;
+}
+
+.library-decade-label {
+  width: 34px;
+  color: var(--vibe-light);
+  font-variant-numeric: tabular-nums;
+}
+
+.library-decade-bar {
+  flex: 1;
+  height: 7px;
+  background: var(--vibe-well);
+}
+
+.library-decade-bar span {
+  display: block;
+  height: 100%;
+  background: var(--vibe-display-dim);
+}
+
+.library-decade-count {
+  width: 30px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- duplicates ---- */
+
+.library-groups {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.library-groups > li {
+  margin-bottom: 6px;
+  padding: 5px 6px;
+  background: var(--vibe-face-dark);
+  border-top: 1px solid var(--vibe-shadow);
+  border-left: 1px solid var(--vibe-shadow);
+  border-right: 1px solid var(--vibe-light);
+  border-bottom: 1px solid var(--vibe-light);
+}
+
+.library-groups ol {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  line-height: 1.7;
+}
+
+.library-groups ol li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-verdict {
+  display: inline-block;
+  padding: 1px 5px;
+  font-size: 8px;
+  letter-spacing: 0.5px;
+  color: #0d0d12;
+  background: var(--vibe-display-dim);
+}
+
+.library-verdict--different-master {
+  background: var(--vibe-warning);
+}
+
+/* ---- the phone layout ---- */
+
+/* Matches `NARROW_MAX_WIDTH` in `webamp/layout.ts`, as `vibe.css` does. */
+@media (max-width: 700px) {
+  .library-window {
+    position: static;
+    width: 275px;
+    max-width: 100%;
+    max-height: none;
+    margin: 0 auto 24px;
+    font-size: 11px;
+  }
+
+  .library-titlebar {
+    padding: 7px 8px;
+    font-size: 11px;
+    cursor: default;
+  }
+
+  .library-close {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+
+  .library-body {
+    /* One column: two 130px charts side by side on a phone is two charts nobody
+       can read. */
+    grid-template-columns: 1fr;
+    padding: 12px;
+    overflow: visible;
+  }
+
+  .library-column + .library-column {
+    margin-top: 12px;
+  }
+
+  .library-section h3,
+  .library-verdict {
+    font-size: 10px;
+  }
+}

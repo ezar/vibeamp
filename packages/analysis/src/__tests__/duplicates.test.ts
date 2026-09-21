@@ -248,6 +248,17 @@ describe('telling a duplicate from a near miss', () => {
     expect(findDuplicates([original, mislabelled])).toEqual([]);
   });
 
+  it('gives no fingerprint to a track too short to fill one', () => {
+    // Zeros are not a weak fingerprint, they are a blank one, and every blank one
+    // sits at distance zero from every other. A sound effect must not be reported
+    // as a duplicate of every other sound effect in the library.
+    const short = extractFeatures(render(BASE).subarray(0, RATE * 12), RATE);
+    expect(short.fingerprint).toBeNull();
+
+    const long = extractFeatures(render(BASE), RATE);
+    expect(long.fingerprint).not.toBeNull();
+  });
+
   it('says nothing about a track it could not fingerprint', () => {
     const unanalysed: Track = { ...original, id: 'unknown', analysis: null, status: 'pending' };
     expect(pairDistance(original, unanalysed)).toBeNull();
