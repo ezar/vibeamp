@@ -9,6 +9,7 @@
 import { create } from 'zustand';
 import type { EnergyShape, VibeTarget } from '@vibeamp/core';
 import type { RunnerProgress } from '../analysis/runner.js';
+import { vibeFromUrl } from '../app/vibeLink.js';
 
 /** Where the sliders sit before the user touches anything. */
 export const DEFAULT_VIBE_TARGET: VibeTarget = {
@@ -48,6 +49,15 @@ export interface AppState {
   setError: (message: string | null) => void;
 }
 
+/**
+ * The sliders a link asked for, read once when the module loads.
+ *
+ * Here rather than in an effect so the faders are already in the right place on
+ * the first frame: a link that visibly snaps the sliders a moment after the page
+ * appears looks like the app changing its mind.
+ */
+const opened = vibeFromUrl(typeof window === 'undefined' ? '' : window.location.href);
+
 export const useAppStore = create<AppState>((set) => ({
   rootName: null,
   scanning: false,
@@ -55,8 +65,8 @@ export const useAppStore = create<AppState>((set) => ({
   analysis: null,
   analysedCount: 0,
   autoDjEnabled: false,
-  vibeTarget: DEFAULT_VIBE_TARGET,
-  energyShape: 'arc',
+  vibeTarget: opened?.target ?? DEFAULT_VIBE_TARGET,
+  energyShape: opened?.shape ?? 'arc',
   crossfadeSec: 4,
   needsReselect: false,
   error: null,

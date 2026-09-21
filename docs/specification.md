@@ -530,6 +530,25 @@ because the two only mean something in combination: a high energy target on a
 wind-down curve is not "peak time", it is a contradiction. They are starting
 points, not modes: nothing is remembered and no preset stays selected.
 
+### A vibe in a link
+
+The five sliders and the curve are the whole of what the planner is told, and none
+of it names a track: they are positions on percentiles that each library computes
+for itself. So the same six numbers mean "loud for this collection, bright for this
+collection" wherever they land, and a link can carry a setting from one person's
+records to another's without carrying any music. It needs no server, which is why
+it is the one thing this player can share at all.
+
+Twelve characters: a version, five bytes of slider, one digit of curve. A byte is
+about a third of a percent of fader travel, finer than anyone can set a 64 pixel
+control. Versioned because the sliders are the product and will change, and a link
+from an older release must be **refused** rather than misread — five values decoded
+into six sliders is not an error a listener would notice, it is a queue that
+reorders for no stated reason.
+
+The link is read before the first render rather than in an effect, so the faders are
+already in place when the window appears. A page opened with one says so, once.
+
 ### The queue, and why
 
 The plan is twenty tracks deep and the shell only ever holds two of them, so until

@@ -80,6 +80,8 @@ export interface VibePanelProps {
   onImport: () => void;
   /** Open or close MilkDrop. The shell's own entry for it is three levels down. */
   onToggleMilkdrop: () => void;
+  /** Copy a link that carries these slider positions and nothing else. */
+  onCopyVibeLink: () => void;
   /** What is playing, for the transition into the first queued track. */
   nowPlaying: Track | null;
   /** What the auto-DJ has lined up, nearest first. Empty when it is switched off. */
@@ -122,6 +124,7 @@ export function VibePanel({
   onExport,
   onImport,
   onToggleMilkdrop,
+  onCopyVibeLink,
   nowPlaying,
   upcoming,
   onApplyPreset,
@@ -285,6 +288,15 @@ export function VibePanel({
           </select>
 
           <div className="vibe-actions">
+            <button
+              type="button"
+              className="vibe-button"
+              disabled={!ready}
+              onClick={onCopyVibeLink}
+              title="Copy a link to these slider positions. It carries no music, and it works on somebody else's library."
+            >
+              Link
+            </button>
             <button
               type="button"
               className="vibe-button"

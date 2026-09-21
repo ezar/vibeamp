@@ -40,6 +40,7 @@ import {
 } from '../library/exchange.js';
 import type { Track } from '@vibeamp/core';
 import type { VibePreset } from '@vibeamp/dj';
+import { vibeFromUrl, vibeLink } from './vibeLink.js';
 import { defaultWorkerCount } from '../analysis/pool.js';
 import './app.css';
 
@@ -163,6 +164,11 @@ export function App(): React.JSX.Element {
       const counts = await services.repository.counts();
       useAppStore.getState().setAnalysedCount(counts.done);
       if (!isNarrowNow()) setPanelPosition(besideTheShell());
+      // Said once, because a queue that is already planned to somebody else's
+      // taste should say where that came from.
+      if (vibeFromUrl(window.location.href) !== null) {
+        setLibraryNotice('Sliders set from a shared link. Move any of them to make it yours.');
+      }
       setReady(true);
     })();
 
@@ -298,6 +304,28 @@ export function App(): React.JSX.Element {
    * A preset is a starting point, not a mode: nothing here is remembered, and the
    * next slider move is an ordinary move from wherever it left things.
    */
+  /**
+   * Copy a link carrying these slider positions.
+   *
+   * The clipboard needs a secure context, which a file:// page and some embedded
+   * browsers are not. Failing there is not a reason to lose the link, so it goes
+   * into the notice where it can be selected by hand.
+   */
+  const handleCopyVibeLink = useCallback(async () => {
+    const state = useAppStore.getState();
+    const link = vibeLink(window.location.href, {
+      target: state.vibeTarget,
+      shape: state.energyShape,
+    });
+
+    try {
+      await navigator.clipboard.writeText(link);
+      setLibraryNotice('Vibe link copied. It carries the sliders, not the music.');
+    } catch {
+      setLibraryNotice(link);
+    }
+  }, []);
+
   const handleApplyPreset = useCallback((preset: VibePreset) => {
     const state = useAppStore.getState();
     state.setVibe(preset.target);
@@ -469,6 +497,7 @@ export function App(): React.JSX.Element {
           onExport={() => void handleExport()}
           onImport={() => void handleImport()}
           onToggleMilkdrop={() => runtime.current?.host.toggleMilkdrop()}
+          onCopyVibeLink={() => void handleCopyVibeLink()}
           nowPlaying={playingTrack}
           upcoming={upcoming}
           onApplyPreset={handleApplyPreset}

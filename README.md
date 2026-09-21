@@ -33,6 +33,11 @@ per track.
   idiom — energy, bright, dance, known, cohere — and letting one go reorders what is
   coming next. The track that is playing is never interrupted. Four presets set them
   all at once when you would rather not fiddle.
+- **Lets you share a vibe, not a playlist.** One button copies a link carrying the
+  five sliders and the curve — twelve characters, no music, no server. It works on
+  somebody else's library, because the sliders are positions on percentiles each
+  collection computes for itself. "My 2am setting" means something on your records
+  too.
 - **Shows you the queue, and why.** The next four tracks with their tempo and
   Camelot code, and one line for the move about to happen: `+6 bpm · 8B→8A
 relative · energy +12`. Where it is not sure of a key it says so instead of
