@@ -110,3 +110,29 @@ export function vibeWindowPosition(main: { readonly top: number; readonly left: 
   if (x < EDGE) return { x: EDGE * 2, y: EDGE * 2 };
   return { x, y: main.top };
 }
+
+/** Width of the library window, borders included. Matches `library.css`. */
+export const LIBRARY_WIDTH = WINDOW_WIDTH * 2 + 1;
+
+/**
+ * Where the library window opens on a desktop: right of the shell, tops aligned.
+ *
+ * The opposite side from the vibe window, so opening it does not bury the sliders.
+ * It lands where MilkDrop docks, which is deliberate — both are things you open to
+ * look at, and only one of them is worth looking at at a time. Either can be
+ * dragged off the other.
+ *
+ * @param main The main window's rectangle, as rendered. Null before the shell exists.
+ * @returns Viewport coordinates, falling back to the left edge when there is not
+ *   room for the window beside the shell.
+ */
+export function libraryWindowPosition(
+  main: { readonly top: number; readonly left: number } | null,
+  viewportWidth: number,
+): { x: number; y: number } {
+  if (main === null) return { x: EDGE * 2, y: EDGE * 2 };
+
+  const x = main.left + WINDOW_WIDTH;
+  if (x + LIBRARY_WIDTH > viewportWidth - EDGE) return { x: EDGE, y: Math.max(EDGE, main.top) };
+  return { x, y: main.top };
+}

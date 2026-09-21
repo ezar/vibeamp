@@ -25,6 +25,7 @@ function features(overrides: Partial<RawFeatures> = {}): RawFeatures {
     fluxMean: 10,
     zcrMean: 0.1,
     danceabilityRaw: 0.6,
+    fingerprint: null,
     windows: [],
     ...overrides,
   };

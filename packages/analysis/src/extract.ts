@@ -8,6 +8,8 @@
 
 import {
   Spectrogram,
+  CHROMA_FRAME_SIZE,
+  chromaSequence,
   chromaVector,
   crestFactor,
   danceabilityProxy,
@@ -21,6 +23,7 @@ import {
   toDbfs,
   zeroCrossingRate,
 } from '@vibeamp/dsp';
+import { FINGERPRINT_FRAMES, FINGERPRINT_SEGMENTS, encodeFingerprint } from '@vibeamp/core';
 import type { RawFeatures, WindowFeatures } from '@vibeamp/core';
 import { MIN_ANALYSABLE_SEC, planWindows } from './windows.js';
 import type { SampleWindow } from './windows.js';
@@ -123,6 +126,7 @@ export function extractFeatures(
       pulseClarity: tempo.confidence,
       lowBandRatio: lowBandMean,
     }),
+    fingerprint: buildFingerprint(samples, sampleRate, plan.descriptor),
     windows,
   };
 
@@ -166,6 +170,57 @@ function measureWindow(
     zcr: zeroCrossingRate(slice, 0, slice.length),
     lowBandRatio: lowBandSum / divisor,
   };
+}
+
+/**
+ * The chroma sequence the duplicate finder compares, packed for storage.
+ *
+ * Built from the same windows the descriptors use, so it costs one more pass over
+ * thirty seconds of audio rather than over the whole file. When a plan has fewer
+ * windows than a fingerprint has segments — a short track is analysed as one — the
+ * single window is divided into that many, which keeps every fingerprint the same
+ * shape and keeps two tracks of the same length sampling the same moments.
+ *
+ * A frame shorter than one chroma FFT window yields zeros, and a fingerprint of
+ * zeros is not a weak fingerprint — it is a blank one that would sit at distance
+ * zero from every other blank one. So a track too short to fill the shape gets no
+ * fingerprint at all. At the analysis rate that floor is about fifteen seconds,
+ * which is an interlude or a sound effect rather than a recording anyone keeps two
+ * copies of.
+ *
+ * @returns Null when the windows cannot fill the shape.
+ */
+function buildFingerprint(
+  samples: Float32Array,
+  sampleRate: number,
+  windows: readonly SampleWindow[],
+): string | null {
+  if (windows.length === 0) return null;
+
+  const segments: SampleWindow[] = [];
+  if (windows.length >= FINGERPRINT_SEGMENTS) {
+    segments.push(...windows.slice(0, FINGERPRINT_SEGMENTS));
+  } else {
+    const whole = windows[0];
+    if (whole === undefined) return null;
+    for (let i = 0; i < FINGERPRINT_SEGMENTS; i += 1) {
+      const offset = whole.offset + Math.floor((i * whole.length) / FINGERPRINT_SEGMENTS);
+      const next = whole.offset + Math.floor(((i + 1) * whole.length) / FINGERPRINT_SEGMENTS);
+      segments.push({ offset, length: next - offset, startSec: offset / sampleRate });
+    }
+  }
+
+  // Checked before any work: every segment must afford a full FFT window per frame.
+  const shortest = Math.min(...segments.map((segment) => segment.length));
+  if (shortest < FINGERPRINT_FRAMES * CHROMA_FRAME_SIZE) return null;
+
+  const frames: number[][] = [];
+  for (const segment of segments) {
+    for (const frame of chromaSequence(sliceOf(samples, segment), sampleRate, FINGERPRINT_FRAMES)) {
+      frames.push([...frame]);
+    }
+  }
+  return encodeFingerprint(frames);
 }
 
 /**

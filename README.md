@@ -38,6 +38,17 @@ per track.
   somebody else's library, because the sliders are positions on percentiles each
   collection computes for itself. "My 2am setting" means something on your records
   too.
+- **X-rays your collection.** One window shows where your library actually sits:
+  a tempo histogram, the Camelot wheel with every position lit by how much of your
+  music is in it, and the decades if your files carry years. Nothing you play tells
+  you this, and no service can — it is read off the audio.
+- **Finds the same recording twice, by sound.** The 320 and the 128 of one rip, the
+  album track and the compilation copy, the remaster beside the original: tags miss
+  all three, because the tags are exactly what differs. vibeamp stores a small
+  fingerprint of how each track's harmony moves over time, which survives
+  re-encoding, a gain change and a remaster, and differs between two pieces of
+  music even when they share a key and a tempo. It lists what it finds and never
+  deletes anything — a radio edit or another take can land there too.
 - **Shows you the queue, and why.** The next four tracks with their tempo and
   Camelot code, and one line for the move about to happen: `+6 bpm · 8B→8A
 relative · energy +12`. Where it is not sure of a key it says so instead of

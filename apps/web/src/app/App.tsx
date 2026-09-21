@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { VibePanel } from '../ui/VibePanel.jsx';
+import { LibraryWindow } from '../ui/LibraryWindow.jsx';
 import { useAppStore } from '../state/store.js';
 import { createServices } from './services.js';
 import type { Services } from './services.js';
@@ -19,7 +20,7 @@ import { buildM3u, matchEntry, parseM3u } from '../library/m3u.js';
 import { createHost, isSupported } from '../webamp/host.js';
 import type { WebampHost } from '../webamp/host.js';
 import { PlaylistBridge } from '../webamp/playlist.js';
-import { vibeWindowPosition } from '../webamp/layout.js';
+import { libraryWindowPosition, vibeWindowPosition } from '../webamp/layout.js';
 import { isNarrowNow, useIsNarrow } from '../ui/useIsNarrow.js';
 import { CrossfadeScheduler } from '../audio/CrossfadeScheduler.js';
 import { QueueController } from '../dj/queueController.js';
@@ -38,7 +39,8 @@ import {
   parseExport,
   promptForExport,
 } from '../library/exchange.js';
-import type { Track } from '@vibeamp/core';
+import { findDuplicates, libraryShape } from '@vibeamp/core';
+import type { DuplicateGroup, LibraryShape, Track } from '@vibeamp/core';
 import type { VibePreset } from '@vibeamp/dj';
 import { vibeFromUrl, vibeLink } from './vibeLink.js';
 import { defaultWorkerCount } from '../analysis/pool.js';
@@ -61,9 +63,19 @@ export function App(): React.JSX.Element {
   // Where the vibe window opens. Measured from the shell once it has rendered, so
   // the two sit together instead of at opposite corners of an empty page.
   const [panelPosition, setPanelPosition] = useState({ x: 16, y: 16 });
+  // The library window opens on the shell's other side, measured the same way.
+  const [libraryPosition, setLibraryPosition] = useState({ x: 16, y: 16 });
   const [libraryNotice, setLibraryNotice] = useState<string | null>(null);
   const [playingTrack, setPlayingTrack] = useState<Track | null>(null);
   const [upcoming, setUpcoming] = useState<readonly PlannedEntry[]>([]);
+  // The X-ray window. Its two answers are computed on demand rather than kept in
+  // step with the library: both are a pass over every track, and nobody is looking
+  // at them while the analysis is still running.
+  const [xray, setXray] = useState<{
+    shape: LibraryShape | null;
+    duplicates: readonly DuplicateGroup[] | null;
+    working: boolean;
+  } | null>(null);
   const narrow = useIsNarrow();
   const store = useAppStore();
   const debugOpen = useDebugPanel();
@@ -163,7 +175,10 @@ export function App(): React.JSX.Element {
 
       const counts = await services.repository.counts();
       useAppStore.getState().setAnalysedCount(counts.done);
-      if (!isNarrowNow()) setPanelPosition(besideTheShell());
+      if (!isNarrowNow()) {
+        setPanelPosition(besideTheShell());
+        setLibraryPosition(rightOfTheShell());
+      }
       // Said once, because a queue that is already planned to somebody else's
       // taste should say where that came from.
       if (vibeFromUrl(window.location.href) !== null) {
@@ -204,7 +219,10 @@ export function App(): React.JSX.Element {
     let frame = 0;
     const place = (): void => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => setPanelPosition(besideTheShell()));
+      frame = requestAnimationFrame(() => {
+        setPanelPosition(besideTheShell());
+        setLibraryPosition(rightOfTheShell());
+      });
     };
 
     place();
@@ -415,6 +433,24 @@ export function App(): React.JSX.Element {
     setLibraryNotice(`Saved ${rows.length} tracks.`);
   }, []);
 
+  /**
+   * Open the library window and measure the library.
+   *
+   * Opened first, computed second. Both answers are a pass over every analysed
+   * track, and on a large collection that is long enough to notice — so the window
+   * appears saying what it is doing rather than the button appearing to do nothing.
+   */
+  const handleOpenLibrary = useCallback(async () => {
+    const current = runtime.current;
+    if (current === null) return;
+
+    setXray({ shape: null, duplicates: null, working: true });
+    const tracks = await current.services.repository.allTracks();
+    // Yielded to once more so the window paints before the two passes begin.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    setXray({ shape: libraryShape(tracks), duplicates: findDuplicates(tracks), working: false });
+  }, []);
+
   const handleCrossfadeChange = useCallback((seconds: number) => {
     useAppStore.getState().setCrossfade(seconds);
     runtime.current?.host.media.setCrossfadeSeconds(seconds);
@@ -498,11 +534,23 @@ export function App(): React.JSX.Element {
           onImport={() => void handleImport()}
           onToggleMilkdrop={() => runtime.current?.host.toggleMilkdrop()}
           onCopyVibeLink={() => void handleCopyVibeLink()}
+          onOpenLibrary={() => void handleOpenLibrary()}
           nowPlaying={playingTrack}
           upcoming={upcoming}
           onApplyPreset={handleApplyPreset}
           narrow={narrow}
           libraryNotice={libraryNotice}
+        />
+      )}
+
+      {ready && xray !== null && (
+        <LibraryWindow
+          shape={xray.shape}
+          duplicates={xray.duplicates}
+          working={xray.working}
+          initialPosition={libraryPosition}
+          narrow={narrow}
+          onClose={() => setXray(null)}
         />
       )}
 
@@ -543,6 +591,15 @@ export function App(): React.JSX.Element {
 function besideTheShell(): { x: number; y: number } {
   const main = document.querySelector('#main-window');
   return vibeWindowPosition(main === null ? null : main.getBoundingClientRect());
+}
+
+/** The same, for the library window, which opens on the shell's other side. */
+function rightOfTheShell(): { x: number; y: number } {
+  const main = document.querySelector('#main-window');
+  return libraryWindowPosition(
+    main === null ? null : main.getBoundingClientRect(),
+    window.innerWidth,
+  );
 }
 
 /** Ask the user for one file of a given kind. Resolves null if they dismiss it. */

@@ -271,6 +271,7 @@ interface TrackAnalysis {
   danceability: number; // 0..1, a percentile of this library
   provisional: boolean; // the library was too small for percentiles
   inputs: NormalisationInputs;
+  fingerprint: string | null; // which recording this is; see below
   windows: WindowFeatures[];
 }
 ```
@@ -290,6 +291,28 @@ exact. Deriving them back out of the percentiles is lossy, and the loss compound
 
 **`compression`, not `dynamics`.** It counts how squashed the master is. The obvious
 name reads as dynamic range and would mean the opposite of the number stored.
+
+### The fingerprint
+
+Every field above is an average, and averages say what a track is _like_, never
+which track it is. Two songs in A minor at 120 BPM average to the same numbers
+because that is what being in A minor at 120 BPM means.
+
+`fingerprint` is the one field that is not an average: a chroma sequence, twelve
+pitch classes sampled twenty times across each of the three descriptor windows.
+720 bytes, packed as 960 characters of URL-safe text so it travels through
+IndexedDB, the JSON export and structured clone without any layer needing to know
+what it is.
+
+Comparing two centres each pitch class on its own mean — which subtracts the static
+profile, the part two tracks in one key share — and allows a slide of up to three
+frames, because two files of the same recording do not sample it at the same
+offset. Pitch classes are compared where they are, so a cover in another key is far
+away: that is the right answer for the only thing this field is for.
+
+`null` below about fifteen seconds of audio, where a frame is shorter than one
+chroma FFT window. A fingerprint of zeros is not a weak fingerprint but a blank
+one, and every blank one sits at distance zero from every other.
 
 ### Versioning
 
@@ -548,6 +571,58 @@ reorders for no stated reason.
 
 The link is read before the first render rather than in an effect, so the faders are
 already in place when the window appears. A page opened with one says so, once.
+
+### The library window
+
+Two things a player that listens to its own files can say and a service with tags
+cannot, in one window opened from the vibe panel.
+
+**The X-ray** counts where a collection sits: a tempo histogram in ten-BPM buckets,
+the Camelot wheel with each of the 24 positions lit by how much of the library is
+in it, and decades where year tags exist. Drawn as the wheel rather than as a bar
+chart of 24 keys, because a bar chart sorts by count and loses the one thing the
+notation is for — neighbours on the wheel mix and opposite sides do not, so a gap
+is visibly a gap in the collection's harmony.
+
+Only analysed tracks are counted, and only estimates the analysis was confident of:
+an estimator with no pulse to find returns a number anyway, and counting those
+draws a peak that belongs to the estimator rather than to the music.
+
+**The duplicates** are the copies of one recording that tags cannot find, because
+the tags are exactly what differs between them. Identical files are already one
+row — a track is keyed by the hash of its contents — so what is left is files that
+differ. Duration buckets the candidates; the fingerprint decides.
+
+Tempo and key look like free rule-outs and are not: tempo estimates are
+octave-ambiguous, and a minor key reads as its relative major often enough that one
+copy of a pair lands on 8A and the other on 8B. Both would discard real duplicates
+to save a comparison the fingerprint makes anyway. The spectral windows are left
+out for the opposite reason — they move under exactly the transformations this must
+see through.
+
+The threshold, 0.12, was measured rather than chosen. Through the real pipeline, on
+pairs built to be hard — same synthesiser, same drum, same tempo, same key:
+
+| pair                                       | distance |
+| ------------------------------------------ | -------- |
+| re-encoded, gain changed, shifted 26ms     | 0.0002   |
+| remastered: compressed 3.2:1               | 0.0005   |
+| same music, brighter percussion            | 0.0000   |
+| same music re-performed                    | 0.0569   |
+| same key and tempo, major instead of minor | 0.1818   |
+| same key and tempo, another progression    | 0.8701   |
+| transposed a minor third                   | 0.9946   |
+| same music at 128 BPM instead of 120       | 0.2548   |
+
+The first design compared the averaged descriptors and did not work: it put a
+remaster at 0.119 from its original and a different piece at 0.071, the wrong way
+round with no threshold in between. The integration test asserts the **gap** rather
+than the threshold, so a pipeline change that closes it fails there instead of
+quietly turning this into a machine for crying wolf.
+
+The window lists and never deletes. An instrumental, a radio edit or another take
+at the same tempo and length can land here, and only the person who owns the
+records can tell.
 
 ### The queue, and why
 
