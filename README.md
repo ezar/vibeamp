@@ -117,10 +117,16 @@ MIT. The shell is [Webamp](https://github.com/captbaritone/webamp) by Jordan
 Eldredge, also MIT; the visualiser is [Butterchurn](https://github.com/jberg/butterchurn),
 also MIT.
 
-Every package this app ships is MIT or Apache-2.0. Both ask that the copyright and
-permission notices travel with the copies you distribute, and a minified bundle is a
-copy — the minifier strips them, so the build writes them back out to
-`THIRD-PARTY-NOTICES.txt`, served next to the app and linked from its `<head>`.
+Every package this app ships is permissive: 28 MIT, one Apache-2.0 (Dexie) and one
+BSD-3-Clause (ieee754). Nothing copyleft, which was the point of
+[decision 0002](docs/decisions/0002-descriptors-in-typescript.md) — the obvious
+descriptor library is AGPL, and publishing this site with it would have put the
+whole app under AGPL.
+
+All three licences ask that the copyright and permission notices travel with the
+copies you distribute, and a minified bundle is a copy — the minifier strips them,
+so the build writes them back out to `THIRD-PARTY-NOTICES.txt`, served next to the
+app and linked from its `<head>`.
 
 Winamp is a trademark of its owner. vibeamp is not affiliated with, endorsed by or
 connected to it; it is an independent project that wears the interface Webamp

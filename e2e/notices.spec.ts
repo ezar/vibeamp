@@ -22,9 +22,11 @@ test('serves the third-party notices next to the app', async ({ page, baseURL })
     expect(notices).toContain(name);
   }
 
-  // Real licence text, not just a list of names.
+  // Real licence text, not just a list of names. All three families the tree
+  // contains, so a new dependency under a fourth one is not silently absorbed.
   expect(notices).toContain('Permission is hereby granted, free of charge');
   expect(notices).toContain('Apache License');
+  expect(notices).toContain('Redistributions of source code must retain');
   expect(notices.length).toBeGreaterThan(10_000);
 });
 
