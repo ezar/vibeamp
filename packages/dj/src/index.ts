@@ -25,4 +25,6 @@ export type { PlanOptions, PlannedTrack } from './queue.js';
 export { explainTransition, keyRelationLabel } from './explain.js';
 export type { KeyRelation, Transition } from './explain.js';
 export { VIBE_PRESETS } from './presets.js';
+export { encodeVibe, decodeVibe } from './vibeLink.js';
+export type { Vibe } from './vibeLink.js';
 export type { VibePreset } from './presets.js';
