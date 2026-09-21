@@ -1,8 +1,8 @@
 <h1 align="center">vibeamp</h1>
 
 <p align="center">
-  <strong>Tu música local, en un Winamp de verdad, con una cola que se ordena por cómo suena.</strong><br/>
-  <em>Your local music, in a real Winamp, with a queue ordered by how it sounds.</em>
+  <strong>Tu música local, con la interfaz de Winamp, y una cola que se ordena por cómo suena.</strong><br/>
+  <em>Your local music, wearing Winamp's interface, with a queue ordered by how it sounds.</em>
 </p>
 
 <p align="center">
@@ -11,7 +11,7 @@
 
 vibeamp points at a folder on your disk, listens to every track once, and then
 builds queues by feel rather than by folder, artist or the genre an ID3 tag claims.
-It wears a real Winamp 2.9 shell, loads real `.wsz` skins, and does all of it in the
+It wears the Winamp 2.9 interface, loads real `.wsz` skins, and does all of it in the
 browser.
 
 **Everything runs on your machine. No account, no server, and no network at all once
@@ -37,7 +37,8 @@ per track.
   Camelot code, and one line for the move about to happen: `+6 bpm · 8B→8A
 relative · energy +12`. Where it is not sure of a key it says so instead of
   inventing a reason.
-- **Is a real Winamp.** The shell is [Webamp](https://webamp.org): three draggable,
+- **Looks and works like Winamp, because it is Webamp.** The shell is
+  [Webamp](https://webamp.org): three draggable,
   dockable windows, the ten-band equaliser on Winamp's own frequencies, the spectrum
   analyser, the hotkeys, and any `.wsz` skin you already have. Load one and it is
   kept, and it joins the shell's own skin menu. None ship with the app — classic
@@ -112,5 +113,23 @@ That is the whole list.
 
 ## Licence
 
-MIT. The shell is [Webamp](https://github.com/captbaritone/webamp), also MIT.
+MIT. The shell is [Webamp](https://github.com/captbaritone/webamp) by Jordan
+Eldredge, also MIT; the visualiser is [Butterchurn](https://github.com/jberg/butterchurn),
+also MIT.
+
+Every package this app ships is permissive: 28 MIT, one Apache-2.0 (Dexie) and one
+BSD-3-Clause (ieee754). Nothing copyleft, which was the point of
+[decision 0002](docs/decisions/0002-descriptors-in-typescript.md) — the obvious
+descriptor library is AGPL, and publishing this site with it would have put the
+whole app under AGPL.
+
+All three licences ask that the copyright and permission notices travel with the
+copies you distribute, and a minified bundle is a copy — the minifier strips them,
+so the build writes them back out to `THIRD-PARTY-NOTICES.txt`, served next to the
+app and linked from its `<head>`.
+
+Winamp is a trademark of its owner. vibeamp is not affiliated with, endorsed by or
+connected to it; it is an independent project that wears the interface Webamp
+recreates and loads the skins people made for it. No skins ship with the app —
+those belong to the people who drew them.
 Winamp skins are the work of their authors and none are redistributed here.

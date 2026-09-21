@@ -39,5 +39,14 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // Build scripts are Node programs. They are not shipped to the browser, and
+    // printing what they did is the point of running them.
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: { process: 'readonly', console: 'readonly' },
+    },
+    rules: { 'no-console': 'off' },
+  },
   prettier,
 );
