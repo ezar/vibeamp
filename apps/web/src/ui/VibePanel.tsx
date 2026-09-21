@@ -155,8 +155,12 @@ export function VibePanel({
       style={narrow ? undefined : { left: position.x, top: position.y }}
     >
       <div className="vibe-titlebar" {...handleProps}>
-        <span>VIBEAMP</span>
-        <span className="vibe-count">{analysedCount} analysed</span>
+        <span className="vibe-title">
+          VIBEAMP
+          {/* Nothing analysed is not worth a number; it is the state the hero
+              button above already explains. */}
+          {analysedCount > 0 && <span className="vibe-count">{analysedCount} analysed</span>}
+        </span>
       </div>
 
       <div className="vibe-body">

@@ -60,13 +60,21 @@ body {
   .app {
     height: auto;
     min-height: 100vh;
+    /* Clear of the notch and the home indicator: this is the top of the page on a
+       phone, where the desktop layout had a margin to spare. */
+    padding-top: env(safe-area-inset-top, 0px);
     /* Room under the panel for the offline notice, which is fixed to the bottom. */
-    padding-bottom: 48px;
+    padding-bottom: calc(48px + env(safe-area-inset-bottom, 0px));
   }
 
-  /* Two stacked windows and the eight pixels Webamp leaves around them. */
+  /*
+   * Exactly the two windows the phone layout opens. Webamp centres its windows in
+   * the node it rendered into, so a container the height of the stack puts it at
+   * the top with nothing to spare — which is what lets the vibe window dock
+   * straight onto the bottom of it.
+   */
   .app-shell {
-    height: 248px;
+    height: 232px;
   }
 
   .app-loading,

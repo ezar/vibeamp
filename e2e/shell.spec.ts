@@ -80,19 +80,47 @@ test('offers the library actions', async ({ page }) => {
   }
 });
 
-test('opens the vibe window beside the shell, not across the page from it', async ({ page }) => {
+test('docks the vibe window onto the shell, as another of its windows', async ({ page }) => {
   // It used to open in the top-left corner while the shell centred itself, leaving
-  // a screen-wide gap between the two halves of the same application.
+  // a screen-wide gap between the two halves of the same application. Then it sat
+  // beside the shell with a gap, which still read as a panel that had been put
+  // next to a player rather than part of one. Winamp's windows dock edge to edge.
   const vibe = await page.locator('.vibe-window').boundingBox();
   const shell = await page.locator('#main-window').boundingBox();
   expect(vibe).not.toBeNull();
   expect(shell).not.toBeNull();
 
-  const gap = shell!.x - (vibe!.x + vibe!.width);
-  expect(gap).toBeGreaterThanOrEqual(0);
-  expect(gap).toBeLessThan(40);
-  // Aligned tops, so they read as one window group.
+  // Flush against the left edge of the stack, and exactly as wide as it.
+  expect(vibe!.x + vibe!.width).toBeCloseTo(shell!.x, 0);
+  expect(vibe!.width).toBeCloseTo(shell!.width, 0);
   expect(Math.abs(vibe!.y - shell!.y)).toBeLessThan(4);
+});
+
+test('wears a Winamp title bar rather than a panel header', async ({ page }) => {
+  // What makes a Winamp window recognisable at a glance is the name centred
+  // between two runs of horizontal lines. Drawn here rather than taken from the
+  // skin, which Webamp does not expose — see decision 0003.
+  const title = page.locator('.vibe-titlebar');
+  await expect(title).toContainText('VIBEAMP');
+
+  const lines = await title.evaluate((element) =>
+    (['::before', '::after'] as const).map((part) => {
+      const style = getComputedStyle(element, part);
+      return { image: style.backgroundImage, width: parseFloat(style.width) };
+    }),
+  );
+
+  for (const line of lines) {
+    expect(line.image).toContain('repeating-linear-gradient');
+    expect(line.width).toBeGreaterThan(10);
+  }
+  // Both runs the same length, so the name sits in the middle of the bar.
+  expect(Math.abs(lines[0]!.width - lines[1]!.width)).toBeLessThan(2);
+});
+
+test('keeps the analysed count out of the title until there is one', async ({ page }) => {
+  // "0 analysed" is not information; it is the state the button above explains.
+  await expect(page.locator('.vibe-count')).toHaveCount(0);
 });
 
 test('toggles the debug panel without resizing the player', async ({ page }) => {

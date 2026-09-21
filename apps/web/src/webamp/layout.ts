@@ -20,10 +20,15 @@ import type { Options } from 'webamp';
 export const WINDOW_WIDTH = 275;
 /** The main and equaliser windows are this tall. */
 export const WINDOW_HEIGHT = 116;
-/** Width of the vibe window, including its borders. Matches `vibe.css`. */
-export const VIBE_WIDTH = 277;
-/** Gap between the vibe window and the shell. */
-export const VIBE_GAP = 14;
+/** Width of the vibe window, borders included. Matches `vibe.css`. */
+export const VIBE_WIDTH = WINDOW_WIDTH;
+/**
+ * Gap between the vibe window and the shell.
+ *
+ * None. Winamp's windows dock edge to edge, and this one is drawn to look like one
+ * of them: a gap would give away that it is not.
+ */
+export const VIBE_GAP = 0;
 /** Smallest margin kept against the edge of the viewport. */
 const EDGE = 8;
 

@@ -502,9 +502,21 @@ closing the window from its title bar leaves nothing to keep in sync.
 ### The vibe window
 
 Five vertical sliders in the Winamp idiom — energy, brightness, danceability,
-familiarity and coherence — in a window of their own beside the shell, draggable by
-its title bar. Version 1 of this document put them in a second tab of the equaliser
-window; Webamp owns its own DOM and has no slot for one. See decision 0003.
+familiarity and coherence — in a window of their own, draggable by its title bar.
+Version 1 of this document put them in a second tab of the equaliser window; Webamp
+owns its own DOM and has no slot for one. See decision 0003.
+
+It is drawn and placed as one of Winamp's own windows rather than as a panel put
+next to one: exactly 275px wide including its borders, docked edge to edge against
+the shell with no gap, and carrying Winamp's title bar — the name centred between
+two runs of horizontal lines. A gap and a different header were enough to make it
+read as a card that happened to load beside the player, which on a phone, where the
+column is all there is, looked like two applications stacked on top of each other.
+
+The title bar is drawn, not skinned, for the same reason the rest of the window is:
+Webamp does not expose the `.wsz` it parsed. Against the default skin the two are
+close enough to read as one instrument. Against a loaded skin this window still
+keeps its own colours, which is the cost decision 0003 already accepted.
 
 Releasing a slider replans; moving it does not. Planning reads the whole analysed
 library, and doing that on every pixel of a drag turns one gesture into a few
