@@ -66,3 +66,37 @@ export function chromaVector(signal: Float32Array, sampleRate: number): Float64A
   if (peak > 0) for (let i = 0; i < 12; i++) chroma[i] /= peak;
   return chroma;
 }
+
+/**
+ * Chroma over time, as a fixed number of equal frames.
+ *
+ * {@link chromaVector} averages a whole excerpt into twelve numbers, which is what
+ * a key estimator wants and exactly the wrong thing for telling two recordings
+ * apart: the average of a chord progression says which key it is in, not which
+ * progression it was. Two different songs in A minor average to nearly the same
+ * twelve numbers. Their *sequences* do not.
+ *
+ * The signal is cut into `frames` equal parts rather than fixed-length ones so that
+ * the result has the same shape for every track, whatever its duration. Comparing
+ * two of them is then a matter of comparing equally sized matrices.
+ *
+ * @param frames How many frames to produce. Must be at least 1.
+ * @returns `frames` vectors of twelve, each normalised so its largest value is 1,
+ *   all zeros where a frame has no energy in the chroma band.
+ */
+export function chromaSequence(
+  signal: Float32Array,
+  sampleRate: number,
+  frames: number,
+): Float64Array[] {
+  const count = Math.max(1, Math.floor(frames));
+  const out: Float64Array[] = [];
+  for (let frame = 0; frame < count; frame++) {
+    const from = Math.floor((frame * signal.length) / count);
+    const to = Math.floor(((frame + 1) * signal.length) / count);
+    // A frame shorter than one FFT window yields nothing; chromaVector returns
+    // zeros for it, which is the honest answer rather than a borrowed neighbour.
+    out.push(chromaVector(signal.subarray(from, to), sampleRate));
+  }
+  return out;
+}

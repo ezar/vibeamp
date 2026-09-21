@@ -198,6 +198,7 @@ export function normaliseFeatures(raw: RawFeatures, statistics: LibraryStatistic
     danceability: position('danceability'),
     provisional,
     inputs,
+    fingerprint: raw.fingerprint,
     windows: raw.windows,
   };
 }

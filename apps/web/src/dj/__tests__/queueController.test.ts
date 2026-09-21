@@ -62,6 +62,7 @@ function makeTrack(id: string): Track {
       danceability: 0.5,
       provisional: false,
       inputs: { loudness: 0.2, brightness: 2000, compression: 5, danceability: 0.6 },
+      fingerprint: null,
       windows: [],
     },
     analysisVersion: 1,

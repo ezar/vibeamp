@@ -24,3 +24,14 @@ export {
   renormalise,
 } from './normalise.js';
 export type { Histogram, LibraryStatistics, NormalisedDescriptor } from './normalise.js';
+export { findDuplicates, pairDistance, DUPLICATE_THRESHOLD } from './duplicates.js';
+export type { DuplicateGroup, DuplicateOptions, DuplicateVerdict } from './duplicates.js';
+export {
+  encodeFingerprint,
+  decodeFingerprint,
+  fingerprintDistance,
+  FINGERPRINT_SEGMENTS,
+  FINGERPRINT_FRAMES,
+  FINGERPRINT_BINS,
+  FINGERPRINT_BYTES,
+} from './fingerprint.js';

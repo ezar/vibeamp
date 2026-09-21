@@ -18,7 +18,7 @@ export type KeyScale = 'major' | 'minor';
  * every track analysed by an older version as pending, which is what lets the
  * pipeline improve without a rescan and without losing the rest of the record.
  */
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
 
 /** Sample rate the analysis runs at, in hertz. */
 export const TARGET_SAMPLE_RATE = 16000;
@@ -99,6 +99,8 @@ export interface RawFeatures {
   zcrMean: number;
   /** Danceability proxy, 0..1. See `@vibeamp/dsp`. */
   danceabilityRaw: number;
+  /** Chroma fingerprint, or null when the track was too short to build one. */
+  fingerprint: string | null;
   windows: WindowFeatures[];
 }
 
@@ -156,6 +158,15 @@ export interface TrackAnalysis {
   provisional: boolean;
   /** What the percentiles were computed from, so they can be recomputed exactly. */
   inputs: NormalisationInputs;
+  /**
+   * Chroma fingerprint: how the harmony moves, sampled across the track.
+   *
+   * The rest of this record says what the track is like. This says which track it
+   * is, and it is the only field that does — everything else is an average, and
+   * two different songs in the same key at the same tempo average to the same
+   * numbers. Null for a track too short to sample. See `fingerprint.ts`.
+   */
+  fingerprint: string | null;
   windows: WindowFeatures[];
 }
 
