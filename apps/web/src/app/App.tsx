@@ -10,6 +10,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { VibePanel } from '../ui/VibePanel.jsx';
 import { LibraryWindow } from '../ui/LibraryWindow.jsx';
+import type { DeepScanState } from '../ui/LibraryWindow.jsx';
+import { deepScan } from '../analysis/deepScan.js';
 import { useAppStore } from '../state/store.js';
 import { createServices } from './services.js';
 import type { Services } from './services.js';
@@ -58,6 +60,10 @@ export function App(): React.JSX.Element {
     skins: LoadedSkins;
     crossfade: CrossfadeScheduler;
   } | null>(null);
+  // The second decode, which is never started on its own: it costs a full-rate
+  // decode of every file, which is the memory the pipeline exists to avoid.
+  const [deep, setDeep] = useState<DeepScanState | null>(null);
+  const deepStop = useRef(false);
 
   const [ready, setReady] = useState(false);
   const [hasLibrary, setHasLibrary] = useState(false);
@@ -507,6 +513,45 @@ export function App(): React.JSX.Element {
     setLibraryNotice(`Saved a set of ${rows.length} tracks.`);
   }, [playingTrack]);
 
+  /**
+   * Decode every reachable file a second time, at its own rate.
+   *
+   * Only the files this session can still open: a folder that is not connected is
+   * not a fault of the file, and there is nothing to decode without one.
+   */
+  const handleDeepScan = useCallback(async () => {
+    const current = runtime.current;
+    if (current === null) return;
+
+    const tracks = await current.services.repository.allAnalysed();
+    const byId = new Map(tracks.map((track) => [track.id, track]));
+    deepStop.current = false;
+    setDeep({ running: true, done: 0, total: tracks.length, currentTitle: null, readings: [] });
+
+    const readings = await deepScan(tracks, (track) => current.services.files.resolve(track), {
+      onProgress: (progress) =>
+        setDeep((previous) => ({
+          running: true,
+          done: progress.done,
+          total: progress.total,
+          currentTitle: progress.currentTitle,
+          readings: previous?.readings ?? [],
+        })),
+      shouldStop: () => deepStop.current,
+    });
+
+    setDeep({
+      running: false,
+      done: readings.length,
+      total: readings.length,
+      currentTitle: null,
+      readings: readings.flatMap((reading) => {
+        const track = byId.get(reading.trackId);
+        return track === undefined ? [] : [{ ...reading, track }];
+      }),
+    });
+  }, []);
+
   const handleCrossfadeChange = useCallback((seconds: number) => {
     useAppStore.getState().setCrossfade(seconds);
     runtime.current?.host.media.setCrossfadeSeconds(seconds);
@@ -605,6 +650,8 @@ export function App(): React.JSX.Element {
           shape={xray.shape}
           duplicates={xray.duplicates}
           health={xray.health}
+          deep={deep}
+          onDeepScan={() => void handleDeepScan()}
           working={xray.working}
           initialPosition={libraryPosition}
           narrow={narrow}

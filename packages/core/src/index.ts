@@ -47,3 +47,13 @@ export type {
 } from './shape.js';
 export { libraryHealth, HEALTH_TRACKS_SHOWN } from './health.js';
 export type { LibraryHealth, HealthFinding, HealthIssue } from './health.js';
+export {
+  cutoffVerdict,
+  describeCutoff,
+  bitrateKbps,
+  CUTOFF_FULL_HZ,
+  CUTOFF_HIGH_HZ,
+  CUTOFF_LOSSY_HZ,
+  TRANSCODE_KBPS,
+} from './cutoff.js';
+export type { CutoffReading, CutoffVerdict } from './cutoff.js';
