@@ -78,10 +78,21 @@ test('measures the tempo and key the files were generated with', async ({ page }
   const rows = page.locator('.vibe-window .vibe-queue li');
   await expect(rows.first()).toBeVisible({ timeout: 30_000 });
 
-  for (const row of await rows.all()) {
-    const title = (await row.locator('.vibe-queue-title').textContent()) ?? '';
-    const meta = (await row.locator('.vibe-queue-meta').textContent()) ?? '';
+  // Both halves of a row in one evaluation, not two awaits.
+  //
+  // The queue re-renders whenever the plan changes, and these fixture tracks are
+  // ten seconds long, so one finishing between reading a row's title and reading
+  // its tempo pairs the name of one track with the number of another. That failed
+  // about one full-suite run in three and looked like a bad measurement, which it
+  // never was: every fixture tempo reads back to within half a BPM.
+  const pairs = await rows.evaluateAll((items) =>
+    items.map((item) => ({
+      title: item.querySelector('.vibe-queue-title')?.textContent ?? '',
+      meta: item.querySelector('.vibe-queue-meta')?.textContent ?? '',
+    })),
+  );
 
+  for (const { title, meta } of pairs) {
     const expected = Number(/(\d+) BPM/.exec(title)?.[1] ?? '0');
     const measured = Number(meta.split(' · ')[0] ?? '0');
     expect(expected).toBeGreaterThan(0);
