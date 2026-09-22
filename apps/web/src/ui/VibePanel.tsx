@@ -304,7 +304,11 @@ export function VibePanel({
               type="button"
               className="vibe-button"
               onClick={onOpenLibrary}
-              disabled={!hasLibrary}
+              // What this needs is analysed tracks, not a folder connected in
+              // this session. On every visit after the first the library is
+              // already in IndexedDB and no folder has been reconnected, which
+              // left the button dead beside a panel saying "142 analysed".
+              disabled={analysedCount === 0}
               title="What this collection looks like in tempo and key, and which files hold the same recording"
             >
               X-ray

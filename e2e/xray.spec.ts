@@ -53,6 +53,16 @@ test('shows the shape of a collection and finds the copy that the names hide', a
 
     await window_.getByRole('button', { name: 'Close' }).click();
     await expect(window_).toHaveCount(0);
+
+    // Every visit after the first: the library is in IndexedDB and no folder has
+    // been reconnected. The window has to work anyway, because what it needs is
+    // analysed tracks and not a folder picker somebody used once.
+    await page.reload();
+    await expect(page.locator('#main-window')).toBeVisible();
+    await expect(page.locator('.vibe-count')).toHaveText(`${library.tracks.length} analysed`);
+    await page.locator('.vibe-window').getByRole('button', { name: 'X-ray' }).click();
+    await expect(window_.getByText('Reading the library…')).toHaveCount(0, { timeout: 60_000 });
+    await expect(window_.locator('.library-groups > li')).toHaveCount(1);
   } finally {
     rmSync(library.dir, { recursive: true, force: true });
   }
