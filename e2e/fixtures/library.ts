@@ -408,3 +408,47 @@ function stereoWav(left: Float32Array, right: Float32Array): Buffer {
   header.writeUInt32LE(body.length, 40);
   return Buffer.concat([header, body]);
 }
+
+/**
+ * A library built to have holes in it, for the gap finder.
+ *
+ * Two groups of keys that cannot reach each other by any move the Camelot wheel
+ * allows — A minor and B minor are two steps apart — with the code that would join
+ * them, F# minor, deliberately absent. And a stretch of tempo with music on both
+ * sides and nothing in it.
+ *
+ * Every track gets its own progression and a fade, so neither the duplicate finder
+ * nor the condition report has anything to say about any of them: the window is
+ * only showing what this fixture is about.
+ */
+export function writeSplitLibrary(): {
+  dir: string;
+  tracks: GeneratedTrack[];
+  /** The code that would join the two groups. */
+  bridge: string;
+} {
+  const dir = mkdtempSync(join(tmpdir(), 'vibeamp-split-'));
+  const seconds = 40;
+  const tracks: GeneratedTrack[] = [];
+
+  // A minor is 8A and B minor is 10A; 9A, which touches both, is left out.
+  const specs: Array<{ bpm: number; root: number; key: string }> = [
+    { bpm: 96, root: 57, key: 'Am' },
+    { bpm: 98, root: 57, key: 'Am' },
+    { bpm: 100, root: 59, key: 'Bm' },
+    { bpm: 136, root: 57, key: 'Am' },
+    { bpm: 138, root: 59, key: 'Bm' },
+    { bpm: 140, root: 59, key: 'Bm' },
+  ];
+
+  specs.forEach((spec, index) => {
+    const fileName = `${String(index + 1).padStart(2, '0')} - ${spec.bpm} BPM in ${spec.key}.wav`;
+    writeFileSync(
+      join(dir, fileName),
+      wav(faded(progressionTrack(spec.bpm, spec.root, true, seconds, index + 20))),
+    );
+    tracks.push({ fileName, bpm: spec.bpm, key: spec.key });
+  });
+
+  return { dir, tracks, bridge: '9A' };
+}

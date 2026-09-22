@@ -149,6 +149,18 @@ function TempoChart({ shape }: { shape: LibraryShape }): React.JSX.Element | nul
         <span>{shape.tempo[Math.floor(shape.tempo.length / 2)]?.fromBpm}</span>
         <span>{shape.tempo.at(-1)?.toBpm}</span>
       </div>
+      {/* Beside the chart rather than in the findings above it: a hole is only
+          legible next to the bars it is a hole in. */}
+      {shape.gaps.tempo.length > 0 && (
+        <p className="library-legend">
+          Nothing between{' '}
+          {shape.gaps.tempo
+            .slice(0, 2)
+            .map((gap) => `${gap.fromBpm} and ${gap.toBpm}`)
+            .join(', nor ')}{' '}
+          BPM — a set crossing there has to jump.
+        </p>
+      )}
     </section>
   );
 }
@@ -209,7 +221,29 @@ function KeyWheel({ shape }: { shape: LibraryShape }): React.JSX.Element | null 
       </svg>
       {/* The ring each mode is drawn in, because nothing else on the wheel says so. */}
       <p className="library-legend">inner ring minor (A) · outer ring major (B)</p>
+      <Islands gaps={shape.gaps} />
     </section>
+  );
+}
+
+/**
+ * Whether the wheel joins up.
+ *
+ * Said only when it does not. One island is the ordinary, healthy case and
+ * announcing it would be noise; two or more is a collection that cannot be mixed
+ * from any track to any other, which is worth a sentence — and the codes that
+ * would join them are the rare thing in this window that names something to do.
+ */
+function Islands({ gaps }: { gaps: LibraryShape['gaps'] }): React.JSX.Element | null {
+  if (gaps.islands.length < 2) return null;
+
+  return (
+    <p className="library-legend library-legend--warn">
+      These keys fall into {gaps.islands.length} groups that cannot reach each other on the wheel
+      {gaps.bridges.length === 0
+        ? '.'
+        : `, so no set crosses between them. A track in ${gaps.bridges.slice(0, 3).join(', ')} would join two of them.`}
+    </p>
   );
 }
 

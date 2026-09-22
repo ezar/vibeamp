@@ -219,6 +219,17 @@
   font-size: 8px;
 }
 
+/*
+ * A legend that is a finding rather than a note.
+ *
+ * Still quiet — it is not an error — but not the same grey as "inner ring minor",
+ * because one of the two says something about the collection and the other only
+ * explains the drawing.
+ */
+.library-legend--warn {
+  color: var(--vibe-warning);
+}
+
 /* ---- years ---- */
 
 .library-decades {

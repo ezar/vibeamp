@@ -15,7 +15,7 @@
  * got to.
  */
 
-import { parseCamelot } from './camelot.js';
+import { compatibleCodes, parseCamelot } from './camelot.js';
 import type { Track } from './types.js';
 
 /** Width of a tempo bucket, in BPM. */
@@ -59,6 +59,45 @@ export interface DecadeCount {
   count: number;
 }
 
+export interface TempoGap {
+  /** Top of the last occupied bucket below the gap, in BPM. */
+  fromBpm: number;
+  /** Bottom of the first occupied bucket above it, in BPM. */
+  toBpm: number;
+}
+
+export interface KeyIsland {
+  /** The codes in it, in wheel order. */
+  codes: string[];
+  /** Tracks across those codes. */
+  count: number;
+}
+
+/**
+ * Where a collection cannot go.
+ *
+ * The charts say where the music is; this says where it is not, which is the half
+ * that can be acted on. A hole in the tempo range is a set that has to jump across
+ * it. A wheel that falls into more than one island is a collection that cannot be
+ * mixed end to end at all, and the codes that would join them are a shopping list.
+ */
+export interface LibraryGaps {
+  /** Empty stretches with music on both sides, widest first. */
+  tempo: TempoGap[];
+  /**
+   * Groups of occupied keys that can reach each other by moves the wheel allows,
+   * largest first. One island is a collection that mixes end to end.
+   */
+  islands: KeyIsland[];
+  /**
+   * Empty codes that would join two or more islands, most joined first.
+   *
+   * Empty when there is nothing to join, which is the healthy case and not a
+   * finding.
+   */
+  bridges: string[];
+}
+
 export interface LibraryShape {
   /** Tracks with descriptors. Everything below is counted from these. */
   analysed: number;
@@ -75,6 +114,8 @@ export interface LibraryShape {
   decades: DecadeCount[];
   /** A few sentences about what the counts show. At most four, possibly none. */
   findings: string[];
+  /** Where the collection cannot go. See {@link LibraryGaps}. */
+  gaps: LibraryGaps;
 }
 
 /**
@@ -130,7 +171,130 @@ export function libraryShape(tracks: readonly Track[]): LibraryShape {
       .map(([decade, count]) => ({ decade, count }))
       .sort((a, b) => a.decade - b.decade),
     findings: describe({ tempo, tempoCounted, keys, keysCounted, playingTimeSec }),
+    gaps: { tempo: tempoGaps(tempo), ...keyIslands(keys) },
   };
+}
+
+/**
+ * Smallest empty stretch worth naming, in buckets.
+ *
+ * Two, which is twenty BPM. One empty bucket between two full ones is the ordinary
+ * lumpiness of any collection; twenty BPM with nothing in it is a stretch a set has
+ * to jump across.
+ */
+const MIN_TEMPO_GAP_BUCKETS = 2;
+
+/**
+ * Empty stretches of tempo with music on both sides.
+ *
+ * Only between occupied buckets. The empty space below the slowest track and above
+ * the fastest is not a gap in a collection, it is the shape of it.
+ */
+function tempoGaps(buckets: readonly TempoBucket[]): TempoGap[] {
+  const occupied = buckets.map((bucket) => bucket.count > 0);
+  const first = occupied.indexOf(true);
+  const last = occupied.lastIndexOf(true);
+  if (first === -1 || last <= first) return [];
+
+  const gaps: TempoGap[] = [];
+  let run = 0;
+  for (let i = first; i <= last; i += 1) {
+    if (!occupied[i]) {
+      run += 1;
+      continue;
+    }
+    if (run >= MIN_TEMPO_GAP_BUCKETS) {
+      gaps.push({
+        fromBpm: buckets[i - run - 1]?.toBpm ?? TEMPO_MIN_BPM,
+        toBpm: buckets[i]?.fromBpm ?? TEMPO_MAX_BPM,
+      });
+    }
+    run = 0;
+  }
+
+  return gaps.sort((a, b) => b.toBpm - b.fromBpm - (a.toBpm - a.fromBpm));
+}
+
+/**
+ * The wheel as a graph, and what it breaks into.
+ *
+ * Two codes are joined when the wheel allows the move between them: a step round
+ * the circle in the same mode, or across to the relative major or minor. The
+ * occupied codes then fall into one or more connected groups, and a collection
+ * with more than one cannot be mixed from any track to any other.
+ *
+ * A bridge is an empty code touching two or more of those groups. Buying one track
+ * in it joins them, which is the rare case of a library report that names
+ * something to do.
+ */
+function keyIslands(slices: readonly KeySlice[]): { islands: KeyIsland[]; bridges: string[] } {
+  const counts = new Map(slices.map((slice) => [slice.camelot, slice.count]));
+  const occupied = slices.filter((slice) => slice.count > 0).map((slice) => slice.camelot);
+  if (occupied.length === 0) return { islands: [], bridges: [] };
+
+  const inLibrary = new Set(occupied);
+  const seen = new Set<string>();
+  const islands: KeyIsland[] = [];
+  /** Which island each code ended up in, for the bridge pass. */
+  const islandOf = new Map<string, number>();
+
+  for (const start of occupied) {
+    if (seen.has(start)) continue;
+
+    const codes: string[] = [];
+    const queue = [start];
+    seen.add(start);
+    while (queue.length > 0) {
+      const code = queue.pop()!;
+      codes.push(code);
+      islandOf.set(code, islands.length);
+      for (const neighbour of compatibleCodes(code)) {
+        if (!inLibrary.has(neighbour) || seen.has(neighbour)) continue;
+        seen.add(neighbour);
+        queue.push(neighbour);
+      }
+    }
+
+    islands.push({
+      codes: codes.sort(byWheelOrder),
+      count: codes.reduce((sum, code) => sum + (counts.get(code) ?? 0), 0),
+    });
+  }
+
+  islands.sort((a, b) => b.count - a.count);
+  // The sort moved the islands, so the indices recorded above no longer name them.
+  const placed = new Map<string, number>();
+  islands.forEach((island, index) => {
+    for (const code of island.codes) placed.set(code, index);
+  });
+
+  const bridges =
+    islands.length < 2
+      ? []
+      : slices
+          .filter((slice) => slice.count === 0)
+          .map((slice) => ({
+            code: slice.camelot,
+            joins: new Set(
+              compatibleCodes(slice.camelot)
+                .map((neighbour) => placed.get(neighbour))
+                .filter((index): index is number => index !== undefined),
+            ).size,
+          }))
+          .filter((candidate) => candidate.joins >= 2)
+          .sort((a, b) => b.joins - a.joins)
+          .map((candidate) => candidate.code);
+
+  return { islands, bridges };
+}
+
+/** 1A, 1B, 2A, 2B and round, so a listed island reads as a walk of the wheel. */
+function byWheelOrder(a: string, b: string): number {
+  const first = parseCamelot(a);
+  const second = parseCamelot(b);
+  if (first === null || second === null) return a.localeCompare(b);
+  if (first.number !== second.number) return first.number - second.number;
+  return first.letter.localeCompare(second.letter);
 }
 
 /**
