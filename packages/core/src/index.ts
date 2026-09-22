@@ -36,6 +36,24 @@ export {
   FINGERPRINT_BYTES,
 } from './fingerprint.js';
 export { libraryShape, TEMPO_BUCKET_BPM, TEMPO_MIN_BPM, TEMPO_MAX_BPM } from './shape.js';
-export type { LibraryShape, TempoBucket, KeySlice, DecadeCount } from './shape.js';
+export type {
+  LibraryShape,
+  TempoBucket,
+  KeySlice,
+  DecadeCount,
+  LibraryGaps,
+  TempoGap,
+  KeyIsland,
+} from './shape.js';
 export { libraryHealth, HEALTH_TRACKS_SHOWN } from './health.js';
 export type { LibraryHealth, HealthFinding, HealthIssue } from './health.js';
+export {
+  cutoffVerdict,
+  describeCutoff,
+  bitrateKbps,
+  CUTOFF_FULL_HZ,
+  CUTOFF_HIGH_HZ,
+  CUTOFF_LOSSY_HZ,
+  TRANSCODE_KBPS,
+} from './cutoff.js';
+export type { CutoffReading, CutoffVerdict } from './cutoff.js';

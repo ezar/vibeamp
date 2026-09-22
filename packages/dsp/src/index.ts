@@ -32,6 +32,7 @@ export { estimateKey, PITCH_CLASS_NAMES } from './key.js';
 export type { KeyEstimate, KeyScale, PitchClassName } from './key.js';
 export { toDbfs, crestFactor, rmsDbfs, clippedRatio } from './loudness.js';
 export { sideRatio } from './stereo.js';
+export { spectralCutoff, CUTOFF_BAND_HZ } from './cutoff.js';
 export { danceabilityProxy, onsetDensity } from './danceability.js';
 export type { DanceabilityInputs } from './danceability.js';
 export { resampleLinear, downmixToMono } from './resample.js';

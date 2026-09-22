@@ -599,14 +599,39 @@ Every threshold was measured through the real pipeline rather than chosen:
 halfway, because the two mistakes do not cost the same: missing a mono file wastes
 some disk, and calling somebody's narrow mix a defect is simply wrong.
 
-**What it cannot see, and says so.** A file re-encoded from a lossy source is
-invisible here. The analysis runs at 16 kHz and an encoder's fingerprint is the
-cutoff in the octave above that; measuring it would mean decoding at the native
-rate, which is the memory cost the whole pipeline is built to avoid. Clipping is
-counted after a resample that blunts the flat tops it looks for, so what it finds
-is real and what it misses may still be there. Both are stated in the window,
-whether or not anything was found — a check that cannot see transcodes must not let
-its silence be read as "no transcodes".
+**What it cannot see, and says so.** Clipping is counted after a resample that
+blunts the flat tops it looks for, so what it finds is real and what it misses may
+still be there. A fault in one channel is averaged against a clean one by the
+downmix. Both are stated in the window whether or not anything was found — a check
+with silent blind spots makes the absence of a finding mean something it does not.
+
+### The second decode
+
+A file re-encoded from a lossy source is invisible to the ordinary analysis: it
+runs at 16 kHz, and an encoder's fingerprint is the cutoff in the octave above
+that. Reaching it needs a second decode at the file's own rate, which is the memory
+cost the whole pipeline is built to avoid — so it is a button rather than part of
+the pipeline, runs one file at a time, hands the thread back between files, and can
+be stopped.
+
+The decode is at a fixed 48 kHz, which `decodeAudioData` does allow to be asked
+for. 44.1 kHz files are resampled _up_ and keep everything they had; a 96 kHz file
+loses what was above 24 kHz, which no encoder's cutoff lives in. Thirty seconds
+from the middle is enough: the cutoff is a property of the encode and does not
+change through a file.
+
+`spectralCutoff` sums the spectrum into 500 Hz bands and returns the top of the
+highest band still within 55 dB of the loudest. Each band is the **median** of its
+energy across frames rather than the sum: one frame can be broadband whatever the
+rest of the file does — a click, an edit point, the join where a track was cut in —
+and a sum lets that single frame decide the answer for the whole file.
+
+**The cutoff alone is not the finding.** A 128 kbps file that stops at 16 kHz is
+being exactly what it says it is, and flagging it would flood the report with
+honest files. What makes it a finding is the cutoff _disagreeing with the bitrate_:
+a file carrying 320 kbps worth of bytes and 128 kbps worth of bandwidth was made
+from something smaller, and the bytes were paid for twice. Without a bitrate to
+disagree with, nothing is claimed.
 
 ### The library window
 

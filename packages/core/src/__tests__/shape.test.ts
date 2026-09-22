@@ -230,3 +230,95 @@ describe('what it says about the counts', () => {
     expect(shape.findings.some((line) => line.includes('of music'))).toBe(false);
   });
 });
+
+describe('where the collection cannot go', () => {
+  it('finds an empty stretch of tempo with music on both sides', () => {
+    const shape = libraryShape([
+      makeTrack({ id: 'slow', bpm: 95 }),
+      makeTrack({ id: 'fast', bpm: 135 }),
+    ]);
+
+    // 90-100 and 130-140 are occupied; everything between is the gap.
+    expect(shape.gaps.tempo).toEqual([{ fromBpm: 100, toBpm: 130 }]);
+  });
+
+  it('is not troubled by one empty bucket', () => {
+    // Ten BPM with nothing in it is the ordinary lumpiness of a collection.
+    const shape = libraryShape([
+      makeTrack({ id: 'a', bpm: 115 }),
+      makeTrack({ id: 'b', bpm: 135 }),
+    ]);
+    expect(shape.gaps.tempo).toEqual([]);
+  });
+
+  it('does not call the empty ends of the range a gap', () => {
+    // Nothing below 120 is the shape of a collection, not a hole in it.
+    const shape = libraryShape([makeTrack({ id: 'a', bpm: 125 })]);
+    expect(shape.gaps.tempo).toEqual([]);
+  });
+
+  it('reports the widest gap first', () => {
+    const shape = libraryShape([
+      makeTrack({ id: 'a', bpm: 65 }),
+      makeTrack({ id: 'b', bpm: 105 }),
+      makeTrack({ id: 'c', bpm: 195 }),
+    ]);
+    // 105 sits in the 100-110 bucket, so the wide gap runs 110 to 190.
+    expect(shape.gaps.tempo.map((gap) => gap.toBpm - gap.fromBpm)).toEqual([80, 30]);
+  });
+});
+
+describe('the wheel as a graph', () => {
+  it('calls keys that reach each other one island', () => {
+    // 8A and 8B are a relative pair; 9A steps round from 9B, which pairs with 9A.
+    const shape = libraryShape([
+      makeTrack({ id: 'a', root: 'A', scale: 'minor' }), // 8A
+      makeTrack({ id: 'b', root: 'C', scale: 'major' }), // 8B
+      makeTrack({ id: 'c', root: 'G', scale: 'major' }), // 9B
+    ]);
+
+    expect(shape.gaps.islands).toHaveLength(1);
+    expect(shape.gaps.islands[0]?.codes).toEqual(['8A', '8B', '9B']);
+    expect(shape.gaps.islands[0]?.count).toBe(3);
+    // Nothing to join, so nothing to buy.
+    expect(shape.gaps.bridges).toEqual([]);
+  });
+
+  it('splits a collection whose keys cannot reach each other', () => {
+    // 8A and 2A are six steps apart: no move the wheel allows joins them.
+    const shape = libraryShape([
+      makeTrack({ id: 'a', root: 'A', scale: 'minor' }), // 8A
+      makeTrack({ id: 'b', root: 'A', scale: 'minor' }),
+      makeTrack({ id: 'c', root: 'G#', scale: 'minor' }), // 1A
+    ]);
+
+    expect(shape.gaps.islands.map((island) => island.codes)).toEqual([['8A'], ['1A']]);
+    // Largest first: two tracks in 8A, one in 1A.
+    expect(shape.gaps.islands[0]?.count).toBe(2);
+  });
+
+  it('names the empty keys that would join two islands', () => {
+    // 8A and 10A are two steps apart. 9A touches both and is empty, so one track
+    // in it would join the collection up.
+    const shape = libraryShape([
+      makeTrack({ id: 'a', root: 'A', scale: 'minor' }), // 8A
+      makeTrack({ id: 'b', root: 'B', scale: 'minor' }), // 10A
+    ]);
+
+    expect(shape.gaps.islands).toHaveLength(2);
+    expect(shape.gaps.bridges).toContain('9A');
+  });
+
+  it('has nothing to say about an empty library', () => {
+    const shape = libraryShape([]);
+    expect(shape.gaps).toEqual({ tempo: [], islands: [], bridges: [] });
+  });
+
+  it('ignores keys the analysis was not sure of, as the wheel does', () => {
+    const shape = libraryShape([
+      makeTrack({ id: 'sure', root: 'A', scale: 'minor' }),
+      makeTrack({ id: 'guess', root: 'D', scale: 'minor', keyStrength: 0.2 }),
+    ]);
+    expect(shape.gaps.islands.map((island) => island.codes)).toEqual([['8A']]);
+  });
+});

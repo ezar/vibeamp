@@ -190,11 +190,15 @@ describe('descriptors from before these checks existed', () => {
 });
 
 describe('what it admits it cannot see', () => {
-  it('always says the transcode check is missing, and why', () => {
-    // The check people most want, and the one the 16 kHz analysis rules out. A
-    // report that stayed quiet about it would make its silence mean "no transcodes".
+  it('always says the ordinary analysis cannot see a transcode, and where to look', () => {
+    // A report that stayed quiet about it would make its silence mean "no
+    // transcodes". It points at the second decode rather than calling the check
+    // impossible, because a line saying "cannot be seen" is false the moment
+    // somebody runs that.
     const health = libraryHealth([makeTrack({ id: 'a' })]);
-    expect(health.blindSpots.some((line) => line.includes('16 kHz'))).toBe(true);
+    const line = health.blindSpots.find((one) => one.includes('16 kHz'));
+    expect(line).toBeDefined();
+    expect(line).toContain('deep check');
   });
 
   it('says clipping is a lower bound only when it found some', () => {

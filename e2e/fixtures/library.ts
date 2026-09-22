@@ -408,3 +408,141 @@ function stereoWav(left: Float32Array, right: Float32Array): Buffer {
   header.writeUInt32LE(body.length, 40);
   return Buffer.concat([header, body]);
 }
+
+/**
+ * A library built to have holes in it, for the gap finder.
+ *
+ * Two groups of keys that cannot reach each other by any move the Camelot wheel
+ * allows — A minor and B minor are two steps apart — with the code that would join
+ * them, F# minor, deliberately absent. And a stretch of tempo with music on both
+ * sides and nothing in it.
+ *
+ * Every track gets its own progression and a fade, so neither the duplicate finder
+ * nor the condition report has anything to say about any of them: the window is
+ * only showing what this fixture is about.
+ */
+export function writeSplitLibrary(): {
+  dir: string;
+  tracks: GeneratedTrack[];
+  /** The code that would join the two groups. */
+  bridge: string;
+} {
+  const dir = mkdtempSync(join(tmpdir(), 'vibeamp-split-'));
+  const seconds = 40;
+  const tracks: GeneratedTrack[] = [];
+
+  // A minor is 8A and B minor is 10A; 9A, which touches both, is left out.
+  const specs: Array<{ bpm: number; root: number; key: string }> = [
+    { bpm: 96, root: 57, key: 'Am' },
+    { bpm: 98, root: 57, key: 'Am' },
+    { bpm: 100, root: 59, key: 'Bm' },
+    { bpm: 136, root: 57, key: 'Am' },
+    { bpm: 138, root: 59, key: 'Bm' },
+    { bpm: 140, root: 59, key: 'Bm' },
+  ];
+
+  specs.forEach((spec, index) => {
+    const fileName = `${String(index + 1).padStart(2, '0')} - ${spec.bpm} BPM in ${spec.key}.wav`;
+    writeFileSync(
+      join(dir, fileName),
+      wav(faded(progressionTrack(spec.bpm, spec.root, true, seconds, index + 20))),
+    );
+    tracks.push({ fileName, bpm: spec.bpm, key: spec.key });
+  });
+
+  return { dir, tracks, bridge: '9A' };
+}
+
+/**
+ * Files that differ only in how much spectrum they have, for the second decode.
+ *
+ * Written at 44.1 kHz, because the question is about the octave the ordinary
+ * analysis cannot reach: at the 16 kHz it decodes to, every one of these looks
+ * identical.
+ *
+ * A WAV band-limited to 16 kHz is exactly the shape of a transcode — a file
+ * carrying a lossless file's worth of bytes and a 128 kbps file's worth of
+ * bandwidth — which is the disagreement the check is built to find.
+ */
+export function writeBandwidthLibrary(): {
+  dir: string;
+  tracks: GeneratedTrack[];
+  /** The file whose bytes and bandwidth disagree. */
+  transcoded: string;
+  /** The file that kept its whole top end. */
+  full: string;
+} {
+  const dir = mkdtempSync(join(tmpdir(), 'vibeamp-band-'));
+  const rate = 44_100;
+  const seconds = 12;
+  const tracks: GeneratedTrack[] = [];
+
+  const write = (fileName: string, cornerHz: number, seed: number): void => {
+    // Faded, so the condition report has nothing to say about these and the window
+    // is only showing what this fixture is about.
+    const samples = bandLimited(cornerHz, rate, seconds, seed);
+    const fade = Math.round(2 * rate);
+    for (let i = 0; i < fade; i += 1) {
+      const at = samples.length - fade + i;
+      samples[at] = (samples[at] ?? 0) * (1 - i / fade);
+    }
+    writeFileSync(join(dir, fileName), wavAt(samples, rate));
+    tracks.push({ fileName, bpm: 0, key: 'C' });
+  };
+
+  write('full-band.wav', rate / 2 - 200, 1);
+  write('good-encode.wav', 19_000, 2);
+  write('transcoded.wav', 16_000, 3);
+
+  return { dir, tracks, transcoded: 'transcoded.wav', full: 'full-band.wav' };
+}
+
+/**
+ * Noise built up to a wall and no further.
+ *
+ * Synthesised rather than filtered: a filter steep enough to stand in for an
+ * encoder's brick wall is harder to write than the signal it would produce, and
+ * summing components up to the corner and stopping puts the wall exactly where
+ * this says it is.
+ */
+function bandLimited(cornerHz: number, rate: number, seconds: number, seed: number): Float32Array {
+  const out = new Float32Array(rate * seconds);
+  let state = seed * 2654435761;
+  const random = (): number => (state = (state * 1664525 + 1013904223) >>> 0) / 4294967296;
+
+  // 200 Hz apart: dense enough to read as broadband, sparse enough to synthesise.
+  for (let hz = 200; hz <= Math.min(cornerHz, rate / 2 - 200); hz += 200) {
+    const phase = random() * 2 * Math.PI;
+    const step = (2 * Math.PI * hz) / rate;
+    for (let i = 0; i < out.length; i += 1) out[i] = (out[i] ?? 0) + Math.cos(phase + step * i);
+  }
+
+  let peak = 0;
+  for (const sample of out) peak = Math.max(peak, Math.abs(sample));
+  if (peak > 0) for (let i = 0; i < out.length; i += 1) out[i] = ((out[i] ?? 0) / peak) * 0.89;
+  return out;
+}
+
+/** The mono WAV writer again, at a rate this fixture chooses. */
+function wavAt(samples: Float32Array, rate: number): Buffer {
+  const body = Buffer.alloc(samples.length * 2);
+  for (let i = 0; i < samples.length; i += 1) {
+    body.writeInt16LE(Math.round(Math.max(-1, Math.min(1, samples[i] ?? 0)) * 32_767), i * 2);
+  }
+
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + body.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(rate, 24);
+  header.writeUInt32LE(rate * 2, 28);
+  header.writeUInt16LE(2, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(body.length, 40);
+  return Buffer.concat([header, body]);
+}

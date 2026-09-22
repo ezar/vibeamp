@@ -73,12 +73,27 @@ export interface M3uOutput {
   path: string;
   durationSec: number | null;
   title: string | null;
+  /**
+   * A line written above this entry, for a person rather than a player.
+   *
+   * Any `#` line that is not a directive is skipped by every reader of this
+   * format, which is what lets one file both play and be read.
+   */
+  note?: string | null;
+}
+
+export interface M3uOptions {
+  /** Lines written once at the top, above the first entry. */
+  header?: readonly string[];
 }
 
 /** Write a playlist in the extended format. */
-export function buildM3u(entries: readonly M3uOutput[]): string {
+export function buildM3u(entries: readonly M3uOutput[], options: M3uOptions = {}): string {
   const lines = ['#EXTM3U'];
+  for (const line of options.header ?? []) lines.push(comment(line));
+
   for (const entry of entries) {
+    if (entry.note !== undefined && entry.note !== null) lines.push(comment(entry.note));
     if (entry.title !== null || entry.durationSec !== null) {
       // -1 is the format's own way of saying the length is not known.
       const seconds = entry.durationSec === null ? -1 : Math.round(entry.durationSec);
@@ -89,6 +104,17 @@ export function buildM3u(entries: readonly M3uOutput[]): string {
   // A trailing newline, because a file that does not end in one upsets line-based
   // tools for no benefit.
   return `${lines.join('\n')}\n`;
+}
+
+/**
+ * One comment line.
+ *
+ * Newlines are stripped rather than escaped: a note that broke into a second line
+ * would put a bare sentence where a path belongs, and the reader would take it for
+ * a track that does not exist.
+ */
+function comment(text: string): string {
+  return `# ${text.replace(/[\r\n]+/g, ' ').trim()}`;
 }
 
 /**

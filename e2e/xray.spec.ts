@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { rmSync } from 'node:fs';
 
-import { writeDuplicateLibrary } from './fixtures/library.js';
+import { writeDuplicateLibrary, writeSplitLibrary } from './fixtures/library.js';
 
 /**
  * The library window: the two things a player that listens can say and a service
@@ -63,6 +63,45 @@ test('shows the shape of a collection and finds the copy that the names hide', a
     await page.locator('.vibe-window').getByRole('button', { name: 'X-ray' }).click();
     await expect(window_.getByText('Reading the library…')).toHaveCount(0, { timeout: 60_000 });
     await expect(window_.locator('.library-groups > li')).toHaveCount(1);
+  } finally {
+    rmSync(library.dir, { recursive: true, force: true });
+  }
+});
+
+test('says where the collection cannot go', async ({ page }) => {
+  // The charts say where the music is. These two lines say where it is not, which
+  // is the half that can be acted on — and they sit beside the chart each one is
+  // about, because a hole is only legible next to the bars it is a hole in.
+  const library = writeSplitLibrary();
+  try {
+    await page.addInitScript(() => {
+      delete (window as { showDirectoryPicker?: unknown }).showDirectoryPicker;
+    });
+
+    await page.goto('/');
+    await expect(page.locator('#main-window')).toBeVisible();
+
+    const chooser = page.waitForEvent('filechooser');
+    await page.locator('.vibe-window').getByRole('button', { name: 'OPEN FOLDER' }).click();
+    await (await chooser).setFiles(library.dir);
+    await expect(page.locator('.vibe-count')).toHaveText(`${library.tracks.length} analysed`, {
+      timeout: 300_000,
+    });
+
+    await page.locator('.vibe-window').getByRole('button', { name: 'X-ray' }).click();
+    const window_ = page.locator('.library-window');
+    await expect(window_.getByText('Reading the library…')).toHaveCount(0, { timeout: 120_000 });
+
+    // Nothing between roughly 100 and 130 BPM, and the fixture has music each side.
+    await expect(window_.locator('.library-section', { hasText: 'TEMPO' })).toContainText(
+      'has to jump',
+    );
+
+    // A minor and B minor cannot reach each other, and the code that would join
+    // them is the one the fixture left out.
+    const wheel = window_.locator('.library-section', { hasText: 'KEY' });
+    await expect(wheel).toContainText('cannot reach each other');
+    await expect(wheel).toContainText(library.bridge);
   } finally {
     rmSync(library.dir, { recursive: true, force: true });
   }

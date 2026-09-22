@@ -219,6 +219,17 @@
   font-size: 8px;
 }
 
+/*
+ * A legend that is a finding rather than a note.
+ *
+ * Still quiet — it is not an error — but not the same grey as "inner ring minor",
+ * because one of the two says something about the collection and the other only
+ * explains the drawing.
+ */
+.library-legend--warn {
+  color: var(--vibe-warning);
+}
+
 /* ---- years ---- */
 
 .library-decades {
@@ -377,6 +388,45 @@
   margin-left: 6px;
   color: var(--vibe-display);
   font-variant-numeric: tabular-nums;
+}
+
+/* ---- the second decode ---- */
+
+.library-deep {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--vibe-shadow);
+  box-shadow: inset 0 1px 0 var(--vibe-light);
+}
+
+.library-deep-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.5;
+  color: var(--vibe-light);
+}
+
+.library-deep-head .vibe-button {
+  flex: none;
+}
+
+.library-deep .library-issues {
+  margin-top: 8px;
+}
+
+/* Only a transcode is worth acting on; the other three are descriptions. */
+.library-issue--transcode {
+  background: #ff8a6a;
+}
+
+.library-issue--lossy {
+  background: var(--vibe-warning);
+}
+
+.library-issue--high,
+.library-issue--full {
+  background: var(--vibe-display-dim);
 }
 
 /*

@@ -11,8 +11,10 @@
  */
 
 import { useMemo } from 'react';
-import { HEALTH_TRACKS_SHOWN } from '@vibeamp/core';
+import { HEALTH_TRACKS_SHOWN, cutoffVerdict, describeCutoff } from '@vibeamp/core';
 import type {
+  CutoffReading,
+  CutoffVerdict,
   DuplicateGroup,
   HealthFinding,
   LibraryHealth,
@@ -36,6 +38,10 @@ export interface LibraryWindowProps {
   shape: LibraryShape | null;
   duplicates: readonly DuplicateGroup[] | null;
   health: LibraryHealth | null;
+  /** The second-decode readings, once somebody has asked for them. */
+  deep: DeepScanState | null;
+  /** Start the second decode. Null when there is nothing reachable to read. */
+  onDeepScan: (() => void) | null;
   /** True while the two are being computed, which is a pass over the library. */
   working: boolean;
   /** Where the window opens. Ignored on a phone, where it is a block in the page. */
@@ -44,10 +50,26 @@ export interface LibraryWindowProps {
   onClose: () => void;
 }
 
+/** One reading, already joined to the track it belongs to. */
+export interface DeepReading extends CutoffReading {
+  track: Track;
+}
+
+/** What the deep scan is doing, or what it found. */
+export interface DeepScanState {
+  running: boolean;
+  done: number;
+  total: number;
+  currentTitle: string | null;
+  readings: readonly DeepReading[];
+}
+
 export function LibraryWindow({
   shape,
   duplicates,
   health,
+  deep,
+  onDeepScan,
   working,
   initialPosition,
   narrow,
@@ -95,7 +117,7 @@ export function LibraryWindow({
           </>
         )}
 
-        {health !== null && <Health health={health} />}
+        {health !== null && <Health health={health} deep={deep} onDeepScan={onDeepScan} />}
 
         {!working && shape !== null && shape.analysed === 0 && (
           <p className="library-note">
@@ -149,6 +171,18 @@ function TempoChart({ shape }: { shape: LibraryShape }): React.JSX.Element | nul
         <span>{shape.tempo[Math.floor(shape.tempo.length / 2)]?.fromBpm}</span>
         <span>{shape.tempo.at(-1)?.toBpm}</span>
       </div>
+      {/* Beside the chart rather than in the findings above it: a hole is only
+          legible next to the bars it is a hole in. */}
+      {shape.gaps.tempo.length > 0 && (
+        <p className="library-legend">
+          Nothing between{' '}
+          {shape.gaps.tempo
+            .slice(0, 2)
+            .map((gap) => `${gap.fromBpm} and ${gap.toBpm}`)
+            .join(', nor ')}{' '}
+          BPM — a set crossing there has to jump.
+        </p>
+      )}
     </section>
   );
 }
@@ -209,7 +243,29 @@ function KeyWheel({ shape }: { shape: LibraryShape }): React.JSX.Element | null 
       </svg>
       {/* The ring each mode is drawn in, because nothing else on the wheel says so. */}
       <p className="library-legend">inner ring minor (A) · outer ring major (B)</p>
+      <Islands gaps={shape.gaps} />
     </section>
+  );
+}
+
+/**
+ * Whether the wheel joins up.
+ *
+ * Said only when it does not. One island is the ordinary, healthy case and
+ * announcing it would be noise; two or more is a collection that cannot be mixed
+ * from any track to any other, which is worth a sentence — and the codes that
+ * would join them are the rare thing in this window that names something to do.
+ */
+function Islands({ gaps }: { gaps: LibraryShape['gaps'] }): React.JSX.Element | null {
+  if (gaps.islands.length < 2) return null;
+
+  return (
+    <p className="library-legend library-legend--warn">
+      These keys fall into {gaps.islands.length} groups that cannot reach each other on the wheel
+      {gaps.bridges.length === 0
+        ? '.'
+        : `, so no set crosses between them. A track in ${gaps.bridges.slice(0, 3).join(', ')} would join two of them.`}
+    </p>
   );
 }
 
@@ -297,7 +353,15 @@ function Duplicates({ groups }: { groups: readonly DuplicateGroup[] }): React.JS
  * nothing was: "no problems" from a check that cannot see transcodes would be read
  * as "no transcodes".
  */
-function Health({ health }: { health: LibraryHealth }): React.JSX.Element {
+function Health({
+  health,
+  deep,
+  onDeepScan,
+}: {
+  health: LibraryHealth;
+  deep: DeepScanState | null;
+  onDeepScan: (() => void) | null;
+}): React.JSX.Element {
   return (
     <section className="library-section library-section--wide">
       <h3>condition</h3>
@@ -319,6 +383,8 @@ function Health({ health }: { health: LibraryHealth }): React.JSX.Element {
           </ul>
         </>
       )}
+      <DeepScan state={deep} onStart={onDeepScan} />
+
       {/* Said before the findings, because it changes what they mean: a count of
           problems is only about the files that were looked at. */}
       {health.awaitingReanalysis > 0 && (
@@ -333,6 +399,116 @@ function Health({ health }: { health: LibraryHealth }): React.JSX.Element {
         ))}
       </ul>
     </section>
+  );
+}
+
+/** What each verdict is called, and the line that explains it. */
+const VERDICT_TEXT: Record<CutoffVerdict, { label: string; detail: string }> = {
+  transcode: {
+    label: 'transcoded',
+    detail:
+      'Carrying a big file’s worth of bytes and a small one’s worth of bandwidth. Made from something worse; the bytes were paid for twice.',
+  },
+  lossy: {
+    label: 'lossy source',
+    detail: 'A modest encode, honestly carried by a file of about the right size.',
+  },
+  high: { label: 'good encode', detail: 'The ceiling of a high-bitrate lossy encode.' },
+  full: { label: 'full band', detail: 'Its whole top end: lossless, or an encode that kept it.' },
+};
+
+/** The order the groups are shown in: what is worth acting on, first. */
+const VERDICT_ORDER: CutoffVerdict[] = ['transcode', 'lossy', 'high', 'full'];
+
+/**
+ * The second decode: the one check the ordinary analysis cannot make.
+ *
+ * Offered rather than run. A full-rate decode of every track is the memory and
+ * time cost the whole pipeline is built to avoid, so this is a button, it says
+ * what it is about to do, and it can be stopped.
+ *
+ * What it reports is not the cutoff but the *disagreement*: a 128 kbps file that
+ * cuts off at 16 kHz is being exactly what it says it is, and only a file carrying
+ * far more bytes than bandwidth has something wrong with it.
+ */
+function DeepScan({
+  state,
+  onStart,
+}: {
+  state: DeepScanState | null;
+  onStart: (() => void) | null;
+}): React.JSX.Element | null {
+  const groups = useMemo(() => {
+    const byVerdict = new Map<CutoffVerdict, DeepReading[]>();
+    for (const reading of state?.readings ?? []) {
+      const verdict = cutoffVerdict(reading);
+      if (verdict === null) continue;
+      const list = byVerdict.get(verdict) ?? [];
+      list.push(reading);
+      byVerdict.set(verdict, list);
+    }
+    for (const list of byVerdict.values()) {
+      list.sort((a, b) => (a.cutoffHz ?? 0) - (b.cutoffHz ?? 0));
+    }
+    return byVerdict;
+  }, [state?.readings]);
+
+  if (onStart === null && state === null) return null;
+
+  return (
+    <div className="library-deep">
+      <div className="library-deep-head">
+        <button
+          type="button"
+          className="vibe-button"
+          disabled={state?.running === true || onStart === null}
+          onClick={() => onStart?.()}
+          title="Decode each file a second time at its own rate and read where its spectrum stops. Slow, and the only way to see a transcode."
+        >
+          {state === null ? 'Deep check' : 'Check again'}
+        </button>
+        {state?.running === true ? (
+          <span>
+            Reading {state.done} of {state.total}
+            {state.currentTitle === null ? '' : ` · ${state.currentTitle}`}
+          </span>
+        ) : (
+          <span>
+            {state === null
+              ? 'Decodes every file again at full rate to find what the 16 kHz analysis cannot.'
+              : `Read ${state.readings.length} files.`}
+          </span>
+        )}
+      </div>
+
+      {groups.size > 0 && (
+        <ul className="library-issues">
+          {VERDICT_ORDER.filter((verdict) => groups.has(verdict)).map((verdict) => {
+            const found = groups.get(verdict) ?? [];
+            const shown = found.slice(0, HEALTH_TRACKS_SHOWN);
+            return (
+              <li key={verdict}>
+                <span className={`library-issue library-issue--${verdict}`}>
+                  {VERDICT_TEXT[verdict].label}
+                </span>
+                <span className="library-issue-count">{found.length}</span>
+                <p>{VERDICT_TEXT[verdict].detail}</p>
+                <ol>
+                  {shown.map((reading) => (
+                    <li key={reading.trackId} title={reading.track.relPath}>
+                      {displayName(reading.track)} · {describeCutoff(reading)}
+                    </li>
+                  ))}
+                </ol>
+                {found.length > shown.length && (
+                  <p className="library-note">and {found.length - shown.length} more.</p>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -369,15 +545,30 @@ function Issue({ finding }: { finding: HealthFinding }): React.JSX.Element {
   );
 }
 
-/** The file, named the way the person would recognise it. */
-function label(track: Track): string {
+/**
+ * The file, named the way the person would recognise it.
+ *
+ * Not called `name`: that is a global on `window`, and a local one of that name
+ * shadowed by it type-checks against the DOM declaration and returns the page's
+ * name instead of the track's.
+ */
+function displayName(track: Track): string {
   const title = track.meta.title ?? track.fileName.replace(/\.[^.]+$/, '');
-  const artist = track.meta.artist;
+  return track.meta.artist === null ? title : `${track.meta.artist} — ${title}`;
+}
+
+/**
+ * The same, with what the file weighs per second.
+ *
+ * Not used in the deep-scan list, where the reading carries the bitrate already
+ * and this would print it twice on one line.
+ */
+function label(track: Track): string {
   const kbps =
     track.durationSec !== null && track.durationSec > 0
-      ? `${Math.round((track.size * 8) / track.durationSec / 1000)}k`
+      ? ` · ${Math.round((track.size * 8) / track.durationSec / 1000)}k`
       : '';
-  return `${artist === null ? '' : `${artist} — `}${title}${kbps === '' ? '' : ` · ${kbps}`}`;
+  return `${displayName(track)}${kbps}`;
 }
 
 /** Green at the library's busiest key, the panel's own dark at nothing. */

@@ -84,6 +84,8 @@ export interface VibePanelProps {
   onCopyVibeLink: () => void;
   /** Open the window that shows what the collection looks like from the inside. */
   onOpenLibrary: () => void;
+  /** Write the planned set out as one file that both plays and reads. */
+  onExportSet: () => void;
   /** What is playing, for the transition into the first queued track. */
   nowPlaying: Track | null;
   /** What the auto-DJ has lined up, nearest first. Empty when it is switched off. */
@@ -128,6 +130,7 @@ export function VibePanel({
   onToggleMilkdrop,
   onCopyVibeLink,
   onOpenLibrary,
+  onExportSet,
   nowPlaying,
   upcoming,
   onApplyPreset,
@@ -299,6 +302,15 @@ export function VibePanel({
               title="Copy a link to these slider positions. It carries no music, and it works on somebody else's library."
             >
               Link
+            </button>
+            <button
+              type="button"
+              className="vibe-button"
+              disabled={!autoDjEnabled}
+              onClick={onExportSet}
+              title="Save the planned set: one .m3u that plays anywhere and reads as a set sheet, each track with the move into it"
+            >
+              Set
             </button>
             <button
               type="button"

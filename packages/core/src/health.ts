@@ -207,11 +207,13 @@ export function libraryHealth(tracks: readonly Track[]): LibraryHealth {
 function blindSpots(analysed: readonly Track[]): string[] {
   const spots: string[] = [];
 
-  // The most-wanted check, and the one the architecture rules out. The analysis
-  // runs at 16 kHz, so everything above 8 kHz — which is exactly where a lossy
-  // encoder's cutoff lives — is gone before any descriptor sees it.
+  // The most-wanted check, and the one the ordinary analysis cannot make: it runs
+  // at 16 kHz, so everything above 8 kHz — exactly where a lossy encoder's cutoff
+  // lives — is gone before any descriptor sees it. Worded as a pointer rather than
+  // as an impossibility, because the second decode below does reach it, and a line
+  // that reads "cannot be seen" would be false the moment somebody ran it.
   spots.push(
-    'A file re-encoded from a lossy source cannot be seen here: the analysis runs at 16 kHz, and an encoder’s fingerprint is in the octave above that.',
+    'The analysis runs at 16 kHz, so a file re-encoded from a lossy source is invisible to it: an encoder’s fingerprint is in the octave above that. The deep check reads it.',
   );
 
   if (analysed.some((track) => (track.analysis?.clippedRatio ?? 0) > 0)) {
