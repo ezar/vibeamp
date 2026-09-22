@@ -22,6 +22,8 @@ export interface AnalysisJob {
   samples: Float32Array;
   sampleRate: number;
   durationSec: number;
+  /** Side over mid, from the decoder. The worker cannot measure it itself. */
+  sideRatio: number | null;
   /** Attempts already made, so the pool can decide whether a failure is final. */
   attempts: number;
 }
@@ -177,6 +179,7 @@ export class AnalysisPool {
         samples: pending.job.samples,
         sampleRate: pending.job.sampleRate,
         durationSec: pending.job.durationSec,
+        sideRatio: pending.job.sideRatio,
       },
     };
     slot.worker.postMessage(message, [pending.job.samples.buffer]);

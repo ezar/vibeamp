@@ -199,6 +199,9 @@ export function normaliseFeatures(raw: RawFeatures, statistics: LibraryStatistic
     provisional,
     inputs,
     fingerprint: raw.fingerprint,
+    tailRatio: raw.tailRatio,
+    clippedRatio: raw.clippedRatio,
+    sideRatio: raw.sideRatio,
     windows: raw.windows,
   };
 }

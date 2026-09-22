@@ -8,7 +8,7 @@
  * takes eight with a stuttering one.
  */
 
-import { downmixToMono, resampleLinear } from '@vibeamp/dsp';
+import { downmixToMono, resampleLinear, sideRatio } from '@vibeamp/dsp';
 import { TARGET_SAMPLE_RATE } from '@vibeamp/analysis';
 
 export interface DecodedAudio {
@@ -17,6 +17,14 @@ export interface DecodedAudio {
   sampleRate: number;
   /** Duration of the original file, in seconds. */
   durationSec: number;
+  /**
+   * Side over mid, as RMS. 0 means the channels carry the same signal.
+   *
+   * Measured here because here is the only place the channels still exist: the
+   * next line downmixes them and everything after this point is mono. Null for a
+   * file that is honestly mono.
+   */
+  sideRatio: number | null;
 }
 
 /** The file could not be decoded by this browser. Never worth retrying. */
@@ -54,11 +62,18 @@ export async function decodeMono(file: Blob): Promise<DecodedAudio> {
   const channels = Array.from({ length: buffer.numberOfChannels }, (_, index) =>
     buffer.getChannelData(index),
   );
+  // Before the downmix, which is the only moment this is knowable.
+  const side = sideRatio(channels);
   const mono = downmixToMono(channels);
   const samples =
     buffer.sampleRate === TARGET_SAMPLE_RATE
       ? mono
       : resampleLinear(mono, buffer.sampleRate, TARGET_SAMPLE_RATE);
 
-  return { samples, sampleRate: TARGET_SAMPLE_RATE, durationSec: buffer.duration };
+  return {
+    samples,
+    sampleRate: TARGET_SAMPLE_RATE,
+    durationSec: buffer.duration,
+    sideRatio: side,
+  };
 }

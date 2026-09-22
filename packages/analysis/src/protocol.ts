@@ -24,6 +24,13 @@ export interface AnalyzeRequest {
   /** Passed explicitly rather than assumed: Safari does not always resample. */
   sampleRate: number;
   durationSec: number;
+  /**
+   * Side over mid, as RMS, measured by the decoder before it downmixed.
+   *
+   * The worker cannot measure this: what crosses to it is already one channel.
+   * Null for a mono file.
+   */
+  sideRatio: number | null;
 }
 
 export type ToWorker =
