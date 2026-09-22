@@ -17,6 +17,7 @@ import { connectFolder, readTagsInBackground } from './library.js';
 import type { FolderSource } from './library.js';
 import { folderFromDrop } from '../library/drop.js';
 import { buildM3u, matchEntry, parseM3u } from '../library/m3u.js';
+import { ENERGY_SHAPE_LABELS, setSheet } from '@vibeamp/dj';
 import { createHost, isSupported } from '../webamp/host.js';
 import type { WebampHost } from '../webamp/host.js';
 import { PlaylistBridge } from '../webamp/playlist.js';
@@ -457,6 +458,55 @@ export function App(): React.JSX.Element {
     });
   }, []);
 
+  /**
+   * Write the plan out as one file that both plays and reads.
+   *
+   * The queue lives in memory and dies with the tab, taking the part that took the
+   * work — the order — with it. The notes ride in `#` comments, which every reader
+   * of the format skips, so this is a playlist in Winamp and a set sheet in a text
+   * editor without being two files.
+   */
+  const handleExportSet = useCallback(() => {
+    const current = runtime.current;
+    if (current === null) return;
+
+    const rows = setSheet(
+      playingTrack,
+      current.queue.upcoming().map((entry) => entry.track),
+    );
+    if (rows.length === 0) {
+      setLibraryNotice('Turn the auto-DJ on and there will be a set to save.');
+      return;
+    }
+
+    const state = useAppStore.getState();
+    const sliders = Object.entries(state.vibeTarget)
+      .map(([name, value]) => `${name} ${Math.round(value * 100)}`)
+      .join(' · ');
+
+    const text = buildM3u(
+      rows.map((row) => ({
+        path: row.track.relPath,
+        durationSec: row.track.durationSec,
+        title: fullTitle(row.track),
+        // An arrow rather than a dash: this is the move into the track below it,
+        // and a reader scanning the file should not have to work that out.
+        note: row.transition === null ? null : `↓ ${row.transition.summary}`,
+      })),
+      {
+        header: [
+          `vibeamp set · ${new Date().toISOString().slice(0, 10)} · ${rows.length} tracks`,
+          `${ENERGY_SHAPE_LABELS[state.energyShape]} · ${sliders}`,
+          'Plays as a playlist. The arrows are the moves between tracks.',
+        ],
+      },
+    );
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadBlob(new Blob([text], { type: 'audio/x-mpegurl' }), `vibeamp-set-${stamp}.m3u`);
+    setLibraryNotice(`Saved a set of ${rows.length} tracks.`);
+  }, [playingTrack]);
+
   const handleCrossfadeChange = useCallback((seconds: number) => {
     useAppStore.getState().setCrossfade(seconds);
     runtime.current?.host.media.setCrossfadeSeconds(seconds);
@@ -541,6 +591,7 @@ export function App(): React.JSX.Element {
           onToggleMilkdrop={() => runtime.current?.host.toggleMilkdrop()}
           onCopyVibeLink={() => void handleCopyVibeLink()}
           onOpenLibrary={() => void handleOpenLibrary()}
+          onExportSet={handleExportSet}
           nowPlaying={playingTrack}
           upcoming={upcoming}
           onApplyPreset={handleApplyPreset}
@@ -607,6 +658,12 @@ function rightOfTheShell(): { x: number; y: number } {
     main === null ? null : main.getBoundingClientRect(),
     window.innerWidth,
   );
+}
+
+/** Artist and title where there is one, for a line somebody will read. */
+function fullTitle(track: Track): string {
+  const title = track.meta.title ?? track.fileName.replace(/\.[^.]+$/, '');
+  return track.meta.artist === null ? title : `${track.meta.artist} - ${title}`;
 }
 
 /** Ask the user for one file of a given kind. Resolves null if they dismiss it. */

@@ -28,3 +28,5 @@ export { VIBE_PRESETS } from './presets.js';
 export { encodeVibe, decodeVibe } from './vibeLink.js';
 export type { Vibe } from './vibeLink.js';
 export type { VibePreset } from './presets.js';
+export { setSheet } from './setSheet.js';
+export type { SetSheetRow } from './setSheet.js';

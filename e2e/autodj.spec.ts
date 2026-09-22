@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { rmSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 
 import { MIN_ANALYSED_TRACKS } from '../packages/dj/src/queue.js';
 import { writeLibrary } from './fixtures/library.js';
@@ -107,4 +107,42 @@ test('replans when a slider moves, without touching what is already queued', asy
 
   const after = await rows.allTextContents();
   expect(after[0]).toBe(before[0]);
+});
+
+test('writes the set out as one file that plays and reads', async ({ page }) => {
+  // The plan lives in memory and dies with the tab. This is the only way the part
+  // that took the work — the order — leaves the browser.
+  const vibe = page.locator('.vibe-window');
+
+  // Nothing to save until the auto-DJ has planned something.
+  await expect(vibe.getByRole('button', { name: 'Set', exact: true })).toBeDisabled();
+  await vibe.getByRole('button', { name: 'AUTO-DJ' }).click();
+  await expect(vibe.locator('.vibe-queue li').first()).toBeVisible({ timeout: 30_000 });
+
+  const download = page.waitForEvent('download');
+  await vibe.getByRole('button', { name: 'Set', exact: true }).click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^vibeamp-set-\d{4}-\d{2}-\d{2}\.m3u$/);
+
+  const text = readFileSync(await file.path(), 'utf8');
+  const lines = text.split('\n');
+
+  expect(lines[0]).toBe('#EXTM3U');
+  expect(lines[1]).toMatch(/^# vibeamp set · \d{4}-\d{2}-\d{2} · \d+ tracks$/);
+
+  // Every path in it is a real file of the library, and every note describes the
+  // move into the track below it rather than floating free.
+  //
+  // Paths are written relative to the library root, as "Save list" writes them, so
+  // they carry the folder the picker reported and are matched on their last part.
+  const paths = lines.filter((line) => line !== '' && !line.startsWith('#'));
+  expect(paths.length).toBeGreaterThan(1);
+  for (const path of paths) {
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    expect(library.tracks.some((track) => track.fileName === name)).toBe(true);
+  }
+
+  const notes = lines.filter((line) => line.startsWith('# ↓'));
+  expect(notes.length).toBe(paths.length - 1);
+  for (const note of notes) expect(note).toMatch(/bpm/);
 });

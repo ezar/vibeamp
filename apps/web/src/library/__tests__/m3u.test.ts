@@ -122,3 +122,45 @@ describe('matchEntry', () => {
     expect(matchEntry(entry('nothing/here.mp3'), byRelPath, byFileName)).toBeNull();
   });
 });
+
+describe('writing notes for a person', () => {
+  it('puts a header above the first entry and a note above the one it leads into', () => {
+    const text = buildM3u(
+      [
+        { path: 'one.mp3', durationSec: 200, title: 'One', note: null },
+        { path: 'two.mp3', durationSec: 180, title: 'Two', note: '↓ +4 bpm · 8A→8B relative' },
+      ],
+      { header: ['vibeamp set · 2 tracks'] },
+    );
+
+    expect(text.split('\n')).toEqual([
+      '#EXTM3U',
+      '# vibeamp set · 2 tracks',
+      '#EXTINF:200,One',
+      'one.mp3',
+      '# ↓ +4 bpm · 8A→8B relative',
+      '#EXTINF:180,Two',
+      'two.mp3',
+      '',
+    ]);
+  });
+
+  it('is still a playlist: a reader skips every note', () => {
+    // The whole reason the notes live in the playlist rather than beside it.
+    const text = buildM3u([{ path: 'one.mp3', durationSec: 200, title: 'One', note: 'a note' }], {
+      header: ['a header'],
+    });
+
+    expect(parseM3u(text)).toEqual([{ path: 'one.mp3', durationSec: 200, title: 'One' }]);
+  });
+
+  it('flattens a note that would otherwise break into a second line', () => {
+    // A bare sentence where a path belongs reads as a track that does not exist.
+    const text = buildM3u([
+      { path: 'one.mp3', durationSec: null, title: null, note: 'first\nsecond' },
+    ]);
+
+    expect(text).toContain('# first second');
+    expect(parseM3u(text)).toHaveLength(1);
+  });
+});
