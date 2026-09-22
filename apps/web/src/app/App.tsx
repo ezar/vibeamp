@@ -39,8 +39,8 @@ import {
   parseExport,
   promptForExport,
 } from '../library/exchange.js';
-import { findDuplicates, libraryShape } from '@vibeamp/core';
-import type { DuplicateGroup, LibraryShape, Track } from '@vibeamp/core';
+import { findDuplicates, libraryHealth, libraryShape } from '@vibeamp/core';
+import type { DuplicateGroup, LibraryHealth, LibraryShape, Track } from '@vibeamp/core';
 import type { VibePreset } from '@vibeamp/dj';
 import { vibeFromUrl, vibeLink } from './vibeLink.js';
 import { defaultWorkerCount } from '../analysis/pool.js';
@@ -74,6 +74,7 @@ export function App(): React.JSX.Element {
   const [xray, setXray] = useState<{
     shape: LibraryShape | null;
     duplicates: readonly DuplicateGroup[] | null;
+    health: LibraryHealth | null;
     working: boolean;
   } | null>(null);
   const narrow = useIsNarrow();
@@ -436,19 +437,24 @@ export function App(): React.JSX.Element {
   /**
    * Open the library window and measure the library.
    *
-   * Opened first, computed second. Both answers are a pass over every analysed
-   * track, and on a large collection that is long enough to notice — so the window
-   * appears saying what it is doing rather than the button appearing to do nothing.
+   * Opened first, computed second. All three answers are a pass over every track,
+   * and on a large collection that is long enough to notice — so the window appears
+   * saying what it is doing rather than the button appearing to do nothing.
    */
   const handleOpenLibrary = useCallback(async () => {
     const current = runtime.current;
     if (current === null) return;
 
-    setXray({ shape: null, duplicates: null, working: true });
+    setXray({ shape: null, duplicates: null, health: null, working: true });
     const tracks = await current.services.repository.allTracks();
     // Yielded to once more so the window paints before the two passes begin.
     await new Promise((resolve) => setTimeout(resolve, 0));
-    setXray({ shape: libraryShape(tracks), duplicates: findDuplicates(tracks), working: false });
+    setXray({
+      shape: libraryShape(tracks),
+      duplicates: findDuplicates(tracks),
+      health: libraryHealth(tracks),
+      working: false,
+    });
   }, []);
 
   const handleCrossfadeChange = useCallback((seconds: number) => {
@@ -547,6 +553,7 @@ export function App(): React.JSX.Element {
         <LibraryWindow
           shape={xray.shape}
           duplicates={xray.duplicates}
+          health={xray.health}
           working={xray.working}
           initialPosition={libraryPosition}
           narrow={narrow}

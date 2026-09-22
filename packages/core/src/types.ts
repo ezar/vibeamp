@@ -18,7 +18,7 @@ export type KeyScale = 'major' | 'minor';
  * every track analysed by an older version as pending, which is what lets the
  * pipeline improve without a rescan and without losing the rest of the record.
  */
-export const ANALYSIS_VERSION = 2;
+export const ANALYSIS_VERSION = 3;
 
 /** Sample rate the analysis runs at, in hertz. */
 export const TARGET_SAMPLE_RATE = 16000;
@@ -101,6 +101,12 @@ export interface RawFeatures {
   danceabilityRaw: number;
   /** Chroma fingerprint, or null when the track was too short to build one. */
   fingerprint: string | null;
+  /** RMS of the last moment over the track's own mean. See `health.ts`. */
+  tailRatio: number;
+  /** Share of the signal sitting in a flat-topped peak, 0..1. A lower bound. */
+  clippedRatio: number;
+  /** Side over mid, as RMS. 0 is two identical channels; null for a mono file. */
+  sideRatio: number | null;
   windows: WindowFeatures[];
 }
 
@@ -167,6 +173,23 @@ export interface TrackAnalysis {
    * numbers. Null for a track too short to sample. See `fingerprint.ts`.
    */
   fingerprint: string | null;
+  /**
+   * Level of the track's last moment, over its own mean.
+   *
+   * Music stops by decaying, so the final quarter second is normally a fraction of
+   * the average. A file that ends at full level was cut. See `health.ts`.
+   */
+  tailRatio: number;
+  /** Share of the signal sitting in a flat-topped peak, 0..1. A lower bound. */
+  clippedRatio: number;
+  /**
+   * Side over mid, as RMS, measured before the downmix.
+   *
+   * 0 means the two channels carry the same signal: a mono recording in a stereo
+   * container. Null for a file that is honestly mono, where there is nothing to
+   * ask. It is the one thing the mono pipeline would otherwise throw away.
+   */
+  sideRatio: number | null;
   windows: WindowFeatures[];
 }
 

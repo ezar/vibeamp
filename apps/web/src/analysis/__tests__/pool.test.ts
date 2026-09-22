@@ -10,6 +10,7 @@ function job(trackId: string, attempts = 0): AnalysisJob {
     samples: new Float32Array(1024),
     sampleRate: 16000,
     durationSec: 200,
+    sideRatio: null,
     attempts,
   };
 }

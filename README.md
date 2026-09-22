@@ -49,6 +49,13 @@ per track.
   re-encoding, a gain change and a remaster, and differs between two pieces of
   music even when they share a key and a tempo. It lists what it finds and never
   deletes anything — a radio edit or another take can land there too.
+- **Tells you which files are broken.** Not by their tags — by their samples. A
+  "stereo" file whose two channels carry the same signal, a download that stopped
+  early and ends at full level, a master clipped flat against the ceiling, a rip
+  that produced forty minutes of silence. Every threshold was measured rather than
+  guessed, and a track that merely stops dead on a beat is left alone. It also says
+  what it _cannot_ see: a file re-encoded from a lossy source is invisible, because
+  the analysis runs at 16 kHz and an encoder's fingerprint lives above that.
 - **Shows you the queue, and why.** The next four tracks with their tempo and
   Camelot code, and one line for the move about to happen: `+6 bpm · 8B→8A
 relative · energy +12`. Where it is not sure of a key it says so instead of

@@ -32,6 +32,9 @@ export function sampleFeatures(): RawFeatures {
     zcrMean: 0.08,
     danceabilityRaw: 0.7,
     fingerprint: null,
+    tailRatio: 0.05,
+    clippedRatio: 0,
+    sideRatio: 0.4,
     windows: [],
   };
 }

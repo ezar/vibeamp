@@ -162,6 +162,7 @@ export class AnalysisRunner {
       samples: decoded.samples,
       sampleRate: decoded.sampleRate,
       durationSec: decoded.durationSec,
+      sideRatio: decoded.sideRatio,
       attempts: track.attempts,
     });
 

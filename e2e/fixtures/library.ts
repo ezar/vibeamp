@@ -178,7 +178,22 @@ export function writeDuplicateLibrary(): {
   };
 }
 
-/** A chord progression over a kick: four bars of i - VI - III - VII, or I - IV - V - IV. */
+/**
+ * A progression belonging to this seed alone.
+ *
+ * Without it, two tracks that differ only in tempo play the identical four chords
+ * in the identical key, which makes them the same piece of music at two speeds —
+ * and the duplicate finder says so, correctly, filling a fixture with pairs nobody
+ * planted. The tonic stays first so the key is still readable; the other three
+ * bars are the seed written in base seven over the scale degrees.
+ */
+function progressionFor(seed: number, minor: boolean): number[] {
+  const scale = minor ? [0, 2, 3, 5, 7, 8, 10] : [0, 2, 4, 5, 7, 9, 11];
+  const digits = [Math.floor(seed / 49) % 7, Math.floor(seed / 7) % 7, seed % 7];
+  return [0, ...digits.map((digit) => scale[digit] ?? 0)];
+}
+
+/** A chord progression over a kick, the progression chosen by `seed`. */
 function progressionTrack(
   bpm: number,
   root: number,
@@ -203,7 +218,7 @@ function progressionTrack(
 
   const beat = (60 / bpm) * RATE;
   const bar = beat * 4;
-  const degrees = minor ? [0, 8, 3, 10] : [0, 5, 7, 5];
+  const degrees = progressionFor(seed, minor);
 
   for (let index = 0; index * bar < total; index += 1) {
     const degree = degrees[index % degrees.length] ?? 0;
@@ -251,4 +266,145 @@ function degrade(samples: Float32Array): Float32Array {
     out[i] = Math.max(-1, Math.min(1, value));
   }
   return out;
+}
+
+/**
+ * A library with real defects in it, for the condition report.
+ *
+ * Every file here is broken in a way that no tag records and that only listening to
+ * the samples can find: a mono recording in a stereo container, a download that
+ * stopped early, a master driven into the ceiling, a rip that produced silence.
+ * Two of them are built to look broken and not be — a track that stops dead on a
+ * beat is a genre, and a loud master is not a clipped one.
+ */
+export function writeUnhealthyLibrary(): {
+  dir: string;
+  tracks: GeneratedTrack[];
+  /** File names by the defect each one carries. */
+  defects: Record<'fakeStereo' | 'truncated' | 'clipped' | 'silent', string>;
+} {
+  const dir = mkdtempSync(join(tmpdir(), 'vibeamp-health-'));
+  const seconds = 40;
+  const tracks: GeneratedTrack[] = [];
+
+  const add = (fileName: string, data: Buffer, bpm: number): void => {
+    writeFileSync(join(dir, fileName), data);
+    tracks.push({ fileName, bpm, key: 'Am' });
+  };
+
+  const body = (bpm: number, seed: number): Float32Array =>
+    progressionTrack(bpm, 57, true, seconds, seed);
+
+  // Healthy: ends by fading, and genuinely two channels.
+  for (let i = 0; i < 2; i += 1) {
+    const samples = faded(body(120 + i * 6, i + 1));
+    add(`healthy-${i + 1}.wav`, stereoWav(samples, widen(samples, i + 9)), 120 + i * 6);
+  }
+
+  // Healthy, and built to look broken: stops dead on the beat, as club music does.
+  const stopsDead = body(128, 3);
+  add('stops-on-the-beat.wav', stereoWav(stopsDead, widen(stopsDead, 11)), 128);
+
+  // Healthy, and built to look broken: loud, and not clipped.
+  const loud = gain(faded(body(124, 4)), 1.11);
+  add('loud-master.wav', stereoWav(loud, widen(loud, 12)), 124);
+
+  const fake = faded(body(118, 5));
+  add('fake-stereo.wav', stereoWav(fake, fake), 118);
+
+  // Truncated: ends at full level because it has no fade.
+  //
+  // Deliberately its own piece rather than a cut copy of a healthy one. A track is
+  // keyed by the hash of its first mebibyte and its size, so a copy that differs
+  // only in its last three seconds is the same track — the two files collide into
+  // one row and the library comes up one short, which is the identity scheme
+  // working and the fixture being wrong.
+  const truncated = body(136, 7);
+  add('truncated-download.wav', stereoWav(truncated, widen(truncated, 14)), 136);
+
+  // Clipped in both channels, as a real loudness-war master is. Driving only one
+  // of them would not show: the analysis works on the mono downmix, where a clean
+  // channel averages the other one's flat tops away.
+  const loudEnough = faded(body(132, 6));
+  add(
+    'clipped-master.wav',
+    stereoWav(gain(loudEnough, 2.2), gain(widen(loudEnough, 13), 2.4)),
+    132,
+  );
+
+  const silent = new Float32Array(RATE * seconds);
+  let state = 4242;
+  for (let i = 0; i < silent.length; i += 1) {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    silent[i] = (state / 4294967296 - 0.5) * 0.0004;
+  }
+  add('failed-rip.wav', stereoWav(silent, silent), 120);
+
+  return {
+    dir,
+    tracks,
+    defects: {
+      fakeStereo: 'fake-stereo.wav',
+      truncated: 'truncated-download.wav',
+      clipped: 'clipped-master.wav',
+      silent: 'failed-rip.wav',
+    },
+  };
+}
+
+/** Faded to nothing over the last three seconds, as most records end. */
+function faded(source: Float32Array): Float32Array {
+  const out = Float32Array.from(source);
+  const length = Math.round(3 * RATE);
+  for (let i = 0; i < length; i += 1) {
+    const at = out.length - length + i;
+    out[at] = (out[at] ?? 0) * (1 - i / length);
+  }
+  return out;
+}
+
+function gain(source: Float32Array, amount: number): Float32Array {
+  const out = new Float32Array(source.length);
+  for (let i = 0; i < source.length; i += 1) {
+    out[i] = Math.max(-1, Math.min(1, (source[i] ?? 0) * amount));
+  }
+  return out;
+}
+
+/** A second channel that genuinely differs, so the pair reads as real stereo. */
+function widen(source: Float32Array, seed: number): Float32Array {
+  const out = Float32Array.from(source);
+  let state = seed * 2654435761;
+  for (let i = 0; i < out.length; i += 1) {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    out[i] = (out[i] ?? 0) * 0.82 + (state / 4294967296 - 0.5) * 0.2;
+  }
+  return out;
+}
+
+/** Wrap two channels as a 16 bit stereo WAV, interleaved. */
+function stereoWav(left: Float32Array, right: Float32Array): Buffer {
+  const frames = Math.min(left.length, right.length);
+  const body = Buffer.alloc(frames * 4);
+  const clamp = (value: number): number => Math.round(Math.max(-1, Math.min(1, value)) * 32_767);
+  for (let i = 0; i < frames; i += 1) {
+    body.writeInt16LE(clamp(left[i] ?? 0), i * 4);
+    body.writeInt16LE(clamp(right[i] ?? 0), i * 4 + 2);
+  }
+
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + body.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(2, 22);
+  header.writeUInt32LE(RATE, 24);
+  header.writeUInt32LE(RATE * 4, 28);
+  header.writeUInt16LE(4, 32);
+  header.writeUInt16LE(16, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(body.length, 40);
+  return Buffer.concat([header, body]);
 }

@@ -36,11 +36,12 @@ self.addEventListener('message', (event: MessageEvent<ToWorker>) => {
       return;
 
     case 'analyze': {
-      const { jobId, samples, sampleRate } = message.payload;
+      const { jobId, samples, sampleRate, sideRatio } = message.payload;
       try {
         const features = extractFeatures(samples, sampleRate, {
           onProgress: (stage, pct) => post({ type: 'progress', payload: { jobId, stage, pct } }),
           shouldCancel: () => cancelled.has(jobId),
+          sideRatio,
         });
         post({ type: 'result', payload: { jobId, features } });
       } catch (error) {

@@ -272,6 +272,9 @@ interface TrackAnalysis {
   provisional: boolean; // the library was too small for percentiles
   inputs: NormalisationInputs;
   fingerprint: string | null; // which recording this is; see below
+  tailRatio: number; // level of the last moment, over the track's own mean
+  clippedRatio: number; // share of the signal in flat-topped peaks
+  sideRatio: number | null; // side over mid; 0 is two identical channels
   windows: WindowFeatures[];
 }
 ```
@@ -572,6 +575,39 @@ reorders for no stated reason.
 The link is read before the first render rather than in an effect, so the faders are
 already in place when the window appears. A page opened with one says so, once.
 
+### The condition of the files
+
+The three fields above the windows describe the file rather than the music, and
+they exist for one question: what in this collection is broken?
+
+`tailRatio` and `clippedRatio` are measured over the whole signal rather than the
+descriptor windows, because a defect at the very end is exactly what those windows
+are placed to avoid. `sideRatio` cannot be measured in the worker at all — what
+crosses to it is already one channel — so the decoder measures it in the only
+moment the two channels exist, between `getChannelData` and the downmix.
+
+Every threshold was measured through the real pipeline rather than chosen:
+
+| measure        | not a defect                        | a defect                   | threshold |
+| -------------- | ----------------------------------- | -------------------------- | --------- |
+| `tailRatio`    | fade-out 0.039, released note 0.012 | cut mid-bar 0.780          | 0.5       |
+| `clippedRatio` | loud master 0.00000                 | driven 6 dB in 0.00990     | 0.001     |
+| `sideRatio`    | absurdly narrow mix 0.02071         | identical channels 0.00000 | 0.005     |
+| `loudnessDb`   | music −16                           | failed rip −79             | −45       |
+
+`sideRatio`'s threshold sits four times below the narrowest measurement rather than
+halfway, because the two mistakes do not cost the same: missing a mono file wastes
+some disk, and calling somebody's narrow mix a defect is simply wrong.
+
+**What it cannot see, and says so.** A file re-encoded from a lossy source is
+invisible here. The analysis runs at 16 kHz and an encoder's fingerprint is the
+cutoff in the octave above that; measuring it would mean decoding at the native
+rate, which is the memory cost the whole pipeline is built to avoid. Clipping is
+counted after a resample that blunts the flat tops it looks for, so what it finds
+is real and what it misses may still be there. Both are stated in the window,
+whether or not anything was found — a check that cannot see transcodes must not let
+its silence be read as "no transcodes".
+
 ### The library window
 
 Two things a player that listens to its own files can say and a service with tags
@@ -620,9 +656,15 @@ round with no threshold in between. The integration test asserts the **gap** rat
 than the threshold, so a pipeline change that closes it fails there instead of
 quietly turning this into a machine for crying wolf.
 
-The window lists and never deletes. An instrumental, a radio edit or another take
-at the same tempo and length can land here, and only the person who owns the
-records can tell.
+**What it cannot do** follows from what it measures. The fingerprint is harmonic,
+so two tracks built on the same chord progression, in the same key, at about the
+same tempo and length are close to indistinguishable to it — the album filler case,
+and a real one. On synthetic tracks sharing a progression and differing only in
+tempo, pairs landed between 0.08 and 0.29, straddling the threshold entirely.
+
+The window lists and never deletes. An instrumental, a radio edit, another take, or
+two tracks that simply share a progression can land here, and only the person who
+owns the records can tell.
 
 ### The queue, and why
 

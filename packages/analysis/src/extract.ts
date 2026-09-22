@@ -11,6 +11,7 @@ import {
   CHROMA_FRAME_SIZE,
   chromaSequence,
   chromaVector,
+  clippedRatio,
   crestFactor,
   danceabilityProxy,
   estimateKey,
@@ -34,6 +35,15 @@ const SPECTRAL_FRAME_SIZE = 2048;
 /** Hop between spectral frames, in samples. Half a frame. */
 const SPECTRAL_HOP_SIZE = 1024;
 
+/**
+ * How much of the end to measure for a truncated file, in seconds.
+ *
+ * A quarter second. Long enough that one sample of noise cannot decide it, short
+ * enough that an ordinary fade-out has already fallen well below the track's mean
+ * by the time this window starts.
+ */
+const TAIL_SEC = 0.25;
+
 /** An error the pipeline raises, carrying the code the protocol reports. */
 export class ExtractionError extends Error {
   constructor(
@@ -47,6 +57,14 @@ export class ExtractionError extends Error {
 
 export interface ExtractOptions {
   onProgress?: (stage: Stage, pct: number) => void;
+  /**
+   * Side over mid, as RMS, measured by the decoder before it downmixed.
+   *
+   * Passed in rather than computed here because by the time the samples reach this
+   * function there is only one channel left. Null for a mono file, and when the
+   * caller did not measure it.
+   */
+  sideRatio?: number | null;
   /**
    * Checked between stages. Cancellation is cooperative because the descriptors are
    * synchronous loops: the pipeline stops at the next boundary rather than part way
@@ -127,6 +145,12 @@ export function extractFeatures(
       lowBandRatio: lowBandMean,
     }),
     fingerprint: buildFingerprint(samples, sampleRate, plan.descriptor),
+    // Measured over the whole signal rather than the descriptor windows: both of
+    // these are about the file, not about the music, and a defect at the very end
+    // is exactly what the windows are placed to avoid looking at.
+    tailRatio: tailLevel(samples, sampleRate, rmsMean),
+    clippedRatio: clippedRatio(samples),
+    sideRatio: options.sideRatio ?? null,
     windows,
   };
 
@@ -170,6 +194,24 @@ function measureWindow(
     zcr: zeroCrossingRate(slice, 0, slice.length),
     lowBandRatio: lowBandSum / divisor,
   };
+}
+
+/**
+ * Level of the track's last moment, over its own mean.
+ *
+ * Music stops by decaying: a fade, a released note, a room going quiet. The final
+ * quarter second of an ordinary track is a small fraction of its average level. A
+ * file that was cut short ends at full level, and this is the number that says so.
+ *
+ * It is deliberately a ratio and not a verdict. Plenty of music genuinely stops
+ * dead on a beat, so this measures and `health.ts` decides what to say about it.
+ *
+ * @returns The ratio, or 0 when there is nothing to compare against.
+ */
+function tailLevel(samples: Float32Array, sampleRate: number, meanRms: number): number {
+  if (meanRms <= 0 || samples.length === 0) return 0;
+  const length = Math.min(samples.length, Math.max(1, Math.round(TAIL_SEC * sampleRate)));
+  return rms(samples.subarray(samples.length - length)) / meanRms;
 }
 
 /**

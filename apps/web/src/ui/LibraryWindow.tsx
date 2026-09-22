@@ -11,7 +11,14 @@
  */
 
 import { useMemo } from 'react';
-import type { DuplicateGroup, LibraryShape, Track } from '@vibeamp/core';
+import { HEALTH_TRACKS_SHOWN } from '@vibeamp/core';
+import type {
+  DuplicateGroup,
+  HealthFinding,
+  LibraryHealth,
+  LibraryShape,
+  Track,
+} from '@vibeamp/core';
 import { useDraggable } from './useDraggable.js';
 import './library.css';
 
@@ -28,6 +35,7 @@ const GROUPS_SHOWN = 12;
 export interface LibraryWindowProps {
   shape: LibraryShape | null;
   duplicates: readonly DuplicateGroup[] | null;
+  health: LibraryHealth | null;
   /** True while the two are being computed, which is a pass over the library. */
   working: boolean;
   /** Where the window opens. Ignored on a phone, where it is a block in the page. */
@@ -39,6 +47,7 @@ export interface LibraryWindowProps {
 export function LibraryWindow({
   shape,
   duplicates,
+  health,
   working,
   initialPosition,
   narrow,
@@ -85,6 +94,8 @@ export function LibraryWindow({
             </div>
           </>
         )}
+
+        {health !== null && <Health health={health} />}
 
         {!working && shape !== null && shape.analysed === 0 && (
           <p className="library-note">
@@ -273,6 +284,88 @@ function Duplicates({ groups }: { groups: readonly DuplicateGroup[] }): React.JS
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * What is wrong with the files themselves.
+ *
+ * Spans both columns because it is a list of names, and because it is the part of
+ * this window that asks for something to be done rather than merely looked at.
+ *
+ * The blind spots are shown whether or not anything was found, and especially when
+ * nothing was: "no problems" from a check that cannot see transcodes would be read
+ * as "no transcodes".
+ */
+function Health({ health }: { health: LibraryHealth }): React.JSX.Element {
+  return (
+    <section className="library-section library-section--wide">
+      <h3>condition</h3>
+      {health.findings.length === 0 ? (
+        <p className="library-note">
+          {health.checked === 0
+            ? 'Nothing checked yet.'
+            : `Nothing wrong with any of the ${health.checked} files checked.`}
+        </p>
+      ) : (
+        <>
+          <p className="library-note">
+            {health.affected} of {health.total} files have something worth a look.
+          </p>
+          <ul className="library-issues">
+            {health.findings.map((finding) => (
+              <Issue key={finding.issue} finding={finding} />
+            ))}
+          </ul>
+        </>
+      )}
+      {/* Said before the findings, because it changes what they mean: a count of
+          problems is only about the files that were looked at. */}
+      {health.awaitingReanalysis > 0 && (
+        <p className="library-note">
+          {health.awaitingReanalysis} more still carry descriptors from an earlier version of the
+          analysis. They are checked once it reaches them.
+        </p>
+      )}
+      <ul className="library-blind">
+        {health.blindSpots.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** The labels, kept out of the data so `health.ts` holds no interface text. */
+const ISSUE_LABELS: Record<HealthFinding['issue'], string> = {
+  undecodable: 'will not play',
+  failed: 'analysis failed',
+  silent: 'empty',
+  'fake-stereo': 'fake stereo',
+  'abrupt-end': 'ends abruptly',
+  clipped: 'clipped',
+};
+
+function Issue({ finding }: { finding: HealthFinding }): React.JSX.Element {
+  const shown = finding.tracks.slice(0, HEALTH_TRACKS_SHOWN);
+  return (
+    <li>
+      <span className={`library-issue library-issue--${finding.issue}`}>
+        {ISSUE_LABELS[finding.issue]}
+      </span>
+      <span className="library-issue-count">{finding.tracks.length}</span>
+      <p>{finding.summary}</p>
+      <ol>
+        {shown.map((track) => (
+          <li key={track.id} title={track.relPath}>
+            {label(track)}
+          </li>
+        ))}
+      </ol>
+      {finding.tracks.length > shown.length && (
+        <p className="library-note">and {finding.tracks.length - shown.length} more.</p>
+      )}
+    </li>
   );
 }
 

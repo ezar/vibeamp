@@ -29,9 +29,16 @@
  * move under exactly the transformations this must see through, and including them
  * pushed the remaster from 0.001 to 0.060, towards the wrong answer.
  *
+ * What it cannot do follows from what it measures. The fingerprint is harmonic, so
+ * two tracks built on the same chord progression, in the same key, at about the
+ * same tempo and length are close to indistinguishable to it — which is the album
+ * filler case, and a real one. Measured on synthetic tracks sharing a progression
+ * and differing only in tempo, pairs landed between 0.08 and 0.29, straddling the
+ * threshold entirely.
+ *
  * This reports. It never deletes, and it never picks a winner: an instrumental, a
- * radio edit or a different take at the same tempo and length can land here, and
- * only the person who owns the records can tell.
+ * radio edit, a different take, or two tracks that simply share a progression can
+ * land here, and only the person who owns the records can tell.
  */
 
 import { fingerprintDistance } from './fingerprint.js';
