@@ -29,6 +29,26 @@ test('offers beat alignment, and only where there is a fade to align', async ({ 
   await expect(beat).toBeDisabled();
 });
 
+test('levels every track against the library, and can be switched off', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#main-window')).toBeVisible();
+
+  const panel = page.locator('.vibe-window');
+  const level = panel.getByRole('button', { name: 'level', exact: true });
+
+  // On by default: on a library too small to have a middle nothing is moved at
+  // all, so there is nothing for it to get wrong.
+  await expect(level).toHaveClass(/vibe-button--on/);
+  await level.click();
+  await expect(level).not.toHaveClass(/vibe-button--on/);
+  await level.click();
+  await expect(level).toHaveClass(/vibe-button--on/);
+
+  // Unlike beat alignment, this has nothing to do with the fade.
+  await panel.locator('#vibe-fade').selectOption('0');
+  await expect(level).toBeEnabled();
+});
+
 test('a seek on a playing element costs less than a fiftieth of a beat', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#main-window')).toBeVisible();

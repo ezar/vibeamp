@@ -43,6 +43,7 @@ import {
   promptForExport,
 } from '../library/exchange.js';
 import {
+  referenceLoudnessDb,
   commonGround,
   compareShapes,
   decodeShapeCode,
@@ -211,9 +212,12 @@ export function App(): React.JSX.Element {
       runtime.current = { services, host, bridge, queue, runner: null, skins, crossfade };
       host.media.setCrossfadeSeconds(useAppStore.getState().crossfadeSec);
       host.media.setBeatAlign(useAppStore.getState().beatAlign);
+      host.media.setLevelling(useAppStore.getState().levelling);
       // The engine works in URLs and knows nothing about tracks; the bridge is
-      // where a track and its URL meet, so that is where the grids live.
-      host.media.setGridLookup((url) => bridge.gridsForUrl(url));
+      // where a track and its URL meet, so that is where the grids and the levels
+      // live.
+      host.media.setPlaybackLookup((url) => bridge.playbackForUrl(url));
+      bridge.setLoudnessReference(referenceLoudnessDb(await services.repository.statistics()));
 
       const counts = await services.repository.counts();
       useAppStore.getState().setAnalysedCount(counts.done);
@@ -344,6 +348,14 @@ export function App(): React.JSX.Element {
     });
     current.runner = runner;
     await runner.run();
+
+    // The library now sits somewhere different, so the level everything is played
+    // at moves with it. Read once at the end of a run rather than on every track:
+    // the reference is a common-mode shift, and moving it mid-run would change the
+    // volume of what is playing for no audible benefit.
+    current.bridge.setLoudnessReference(
+      referenceLoudnessDb(await current.services.repository.statistics()),
+    );
   }, []);
 
   const handleToggleAutoDj = useCallback((enabled: boolean) => {
@@ -727,6 +739,11 @@ export function App(): React.JSX.Element {
     runtime.current?.host.media.setBeatAlign(enabled);
   }, []);
 
+  const handleLevellingChange = useCallback((enabled: boolean) => {
+    useAppStore.getState().setLevelling(enabled);
+    runtime.current?.host.media.setLevelling(enabled);
+  }, []);
+
   /** Load a `.wsz` the user brings. The app ships none of its own. */
   const handleLoadSkin = useCallback(async () => {
     const current = runtime.current;
@@ -800,6 +817,8 @@ export function App(): React.JSX.Element {
           onCrossfadeChange={handleCrossfadeChange}
           beatAlign={store.beatAlign}
           onBeatAlignChange={handleBeatAlignChange}
+          levelling={store.levelling}
+          onLevellingChange={handleLevellingChange}
           onShapeChange={store.setEnergyShape}
           onToggleAutoDj={handleToggleAutoDj}
           onLoadSkin={() => void handleLoadSkin()}

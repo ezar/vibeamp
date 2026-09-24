@@ -17,6 +17,7 @@ export {
   createLibraryStatistics,
   addSample,
   percentileOf,
+  valueAtPercentile,
   descriptorInputs,
   recordFeatures,
   recordInputs,
@@ -69,6 +70,13 @@ export {
 export type { SharedShape } from './shapeCode.js';
 export { compareShapes, commonGround } from './compare.js';
 export type { ShapeComparison, TempoBand } from './compare.js';
+export {
+  referenceLoudnessDb,
+  trimDb,
+  MAX_TRIM_DB,
+  PEAK_MARGIN_DB,
+  MIN_TRACKS_FOR_LEVELLING,
+} from './levelling.js';
 export { libraryHealth, HEALTH_TRACKS_SHOWN } from './health.js';
 export type { LibraryHealth, HealthFinding, HealthIssue } from './health.js';
 export {

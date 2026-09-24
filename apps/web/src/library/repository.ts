@@ -178,6 +178,17 @@ export class LibraryRepository {
   }
 
   /**
+   * The stored library distribution, read and not recomputed.
+   *
+   * What the levelling reference needs: a median, which the histogram already
+   * holds. Distinct from {@link rebuildStatistics}, which walks every track and
+   * rewrites every percentile — far too much work to learn one number at start-up.
+   */
+  async statistics(): Promise<LibraryStatistics> {
+    return readStatistics(this.db, createLibraryStatistics());
+  }
+
+  /**
    * Recompute the library distribution from every stored analysis, then re-rank.
    *
    * Needed after an import, and after anything else that changes which tracks the

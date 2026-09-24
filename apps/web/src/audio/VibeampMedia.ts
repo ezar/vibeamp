@@ -13,9 +13,9 @@
  * The graph:
  *
  * ```
- * deck A <audio> -> source -> deck gain -\
- *                                         >- headroom -> preamp -> EQ x10
- * deck B <audio> -> source -> deck gain -/                            |
+ * deck A <audio> -> source -> trim -> deck gain -\
+ *                                                 >- headroom -> preamp -> EQ x10
+ * deck B <audio> -> source -> trim -> deck gain -/                    |
  *                                                                     v
  *   destination <- master gain <- analyser <- balance (split/merge) <--+
  * ```
@@ -31,25 +31,34 @@ export const DEFAULT_CROSSFADE_SEC = 4;
 /** Longest cross-fade the UI offers, in seconds. */
 export const MAX_CROSSFADE_SEC = 12;
 /**
- * The beat grids at each end of whatever is at a URL.
+ * What to do with whatever is at a URL when it plays: where its beats fall, and how
+ * far its level is from the rest of the library.
  *
  * Supplied by whoever owns the URLs, because this class deliberately knows nothing
- * about tracks — and a fade cannot wait for a database read, since it is happening
- * now.
+ * about tracks — and neither a fade nor a level can wait for a database read, since
+ * both are happening now.
  */
-export type GridLookup = (
+export type PlaybackLookup = (
   url: string | null,
-) => { intro: TrackGrid | null; outro: TrackGrid | null } | null;
+) => { intro: TrackGrid | null; outro: TrackGrid | null; trimDb: number } | null;
 
 /** FFT size for the visualiser. Webamp's own spectrum analyser expects this. */
 const FFT_SIZE = 2048;
 /** Smoothing of the visualiser, 0..1. Higher is calmer. */
 const VISUALISER_SMOOTHING = 0.8;
 
-/** One playback deck: an element, its source node and its cross-fade gain. */
+/** One playback deck: an element, its source node, its level and its fade gain. */
 interface Deck {
   element: HTMLAudioElement;
   source: MediaElementAudioSourceNode;
+  /**
+   * This track's own level correction. See `levelling.ts`.
+   *
+   * A node of its own rather than a factor folded into the fade gain, because the
+   * fade ramps that gain from zero to one and back: anything multiplied into it
+   * would be undone by the next ramp.
+   */
+  trim: GainNode;
   gain: GainNode;
   /** The URL currently loaded. Owned by the caller, never revoked here. */
   url: string | null;
@@ -74,7 +83,8 @@ export class VibeampMedia {
   private preampValue = 50;
   private crossfadeSec = DEFAULT_CROSSFADE_SEC;
   private beatAlign = false;
-  private grids: GridLookup = () => null;
+  private levelling = false;
+  private playback: PlaybackLookup = () => null;
 
   constructor(context: AudioContext = new AudioContext()) {
     this.context = context;
@@ -261,9 +271,17 @@ export class VibeampMedia {
     this.beatAlign = enabled;
   }
 
-  /** Where to find the beat grids for a URL. */
-  setGridLookup(lookup: GridLookup): void {
-    this.grids = lookup;
+  /** Play every track at the level the rest of the library sits at. */
+  setLevelling(enabled: boolean): void {
+    this.levelling = enabled;
+    // Applied to what is already loaded, so the switch is audible at once rather
+    // than only at the next track.
+    for (const deck of this.decks) this.applyTrim(deck);
+  }
+
+  /** Where to find what a URL needs at playback time. */
+  setPlaybackLookup(lookup: PlaybackLookup): void {
+    this.playback = lookup;
   }
 
   // ---- internals ----
@@ -283,7 +301,14 @@ export class VibeampMedia {
     const source = this.context.createMediaElementSource(element);
     source.connect(gain);
 
-    const deck: Deck = { element, source, gain, url: null };
+    // The level correction sits between the element and the fade, so the fade is
+    // free to ramp its own gain from zero to one without undoing it.
+    const trim = this.context.createGain();
+    trim.connect(gain);
+    source.disconnect();
+    source.connect(trim);
+
+    const deck: Deck = { element, source, trim, gain, url: null };
     this.wireEvents(deck);
     return deck;
   }
@@ -333,6 +358,20 @@ export class VibeampMedia {
     deck.url = url;
     deck.element.src = url;
     deck.gain.gain.value = 1;
+    this.applyTrim(deck);
+  }
+
+  /**
+   * Set a deck's level correction to whatever the track on it needs.
+   *
+   * Set outright rather than ramped: this runs as a deck is loaded, when it is
+   * silent, and a ramp would only smear the change across the first moment of the
+   * new track. The one case where it runs on a playing deck is the switch being
+   * turned on or off, where a step of a few decibels is what was asked for.
+   */
+  private applyTrim(deck: Deck): void {
+    const db = this.levelling ? (this.playback(deck.url)?.trimDb ?? 0) : 0;
+    deck.trim.gain.value = dbToGain(db);
   }
 
   /** Ramp `outgoing` down and `incoming` up over the cross-fade length. */
@@ -376,9 +415,9 @@ export class VibeampMedia {
     if (!this.beatAlign) return;
 
     const at = alignedStart({
-      outgoing: this.grids(outgoing.url)?.outro ?? null,
+      outgoing: this.playback(outgoing.url)?.outro ?? null,
       outgoingAtSec: outgoing.element.currentTime,
-      incoming: this.grids(incoming.url)?.intro ?? null,
+      incoming: this.playback(incoming.url)?.intro ?? null,
       incomingAtSec: incoming.element.currentTime,
       incomingDurationSec: incoming.element.duration,
     });
