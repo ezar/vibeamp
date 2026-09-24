@@ -73,6 +73,25 @@ per track.
   nothing that says what you own. Paste theirs and you get where you both live,
   where each of you lives alone, and a playlist of **your** records from the ground
   you share.
+- **Plays the whole collection at one volume.** A CD mastered in 1985 and a
+  reissue from 2015 are ten decibels apart, and every few tracks somebody reaches
+  for the volume. This is ReplayGain without the tags: the level of every track was
+  measured when it was analysed, so the correction needs nothing written in the
+  file. The reference is your library's own middle, so half of it moves up and half
+  moves down and the master fader stays where it was — and a boost is capped by the
+  headroom actually measured, so nothing is ever turned up into the ceiling.
+- **Knows where a track really starts and stops.** A file's length and a
+  recording's length are different things, and every collection is full of the
+  difference: a rip that kept the lead-in, a download padded by its encoder, an
+  album track with the run-out left on. Silence at the ends is skipped, the fade
+  aims at the end of the _music_, and the condition report names the padded files
+  in case you would rather fix the rip. Dead air only: a quiet intro is never cut
+  and a fade-out is never trimmed.
+- **Gets you from one record to another.** Name where you are and where you want to
+  end up and it lays out the route between them, out of your own records, each step
+  a move it can explain. Nothing is sped up or slowed down — it is a route through a
+  collection, not a mix. No service can do it, because nothing a service stores
+  about a track is a distance to another one.
 - **Brings the next track in on the beat.** Not beatmatching — nothing is sped up,
   and both records play at their own tempo. The incoming track simply starts from
   the point that puts its first beat where the outgoing track's next beat falls, and
