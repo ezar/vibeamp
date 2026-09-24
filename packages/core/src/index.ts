@@ -58,6 +58,17 @@ export type {
   WantOptions,
   ArtistNote,
 } from './wantList.js';
+export {
+  encodeShapeCode,
+  decodeShapeCode,
+  ownShape,
+  SHAPE_CODE_LENGTH,
+  SHAPE_TEMPO_BUCKETS,
+  SHAPE_KEY_SLICES,
+} from './shapeCode.js';
+export type { SharedShape } from './shapeCode.js';
+export { compareShapes, commonGround } from './compare.js';
+export type { ShapeComparison, TempoBand } from './compare.js';
 export { libraryHealth, HEALTH_TRACKS_SHOWN } from './health.js';
 export type { LibraryHealth, HealthFinding, HealthIssue } from './health.js';
 export {

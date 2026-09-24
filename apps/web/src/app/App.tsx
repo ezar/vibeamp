@@ -43,6 +43,10 @@ import {
   promptForExport,
 } from '../library/exchange.js';
 import {
+  commonGround,
+  compareShapes,
+  decodeShapeCode,
+  encodeShapeCode,
   findDuplicates,
   libraryHealth,
   libraryShape,
@@ -55,6 +59,7 @@ import type {
   LibraryHealth,
   LibraryShape,
   ProposedName,
+  ShapeComparison,
   Track,
   WantReport,
 } from '@vibeamp/core';
@@ -103,6 +108,12 @@ export function App(): React.JSX.Element {
   // The last list somebody matched. Kept beside the X-ray rather than inside it
   // because it survives a re-measure: nobody wants to paste the list again.
   const [want, setWant] = useState<WantReport | null>(null);
+  // A collection compared against a code somebody sent, and the records of this
+  // library that sit in the ground the two share.
+  const [comparison, setComparison] = useState<{
+    report: ShapeComparison;
+    common: readonly Track[];
+  } | null>(null);
   const narrow = useIsNarrow();
   const store = useAppStore();
   const debugOpen = useDebugPanel();
@@ -549,6 +560,71 @@ export function App(): React.JSX.Element {
     [xray?.names, xray?.shape],
   );
 
+  /** Copy this library's shape: two histograms and a count, and nothing else. */
+  const handleCopyShapeCode = useCallback(async () => {
+    const shape = xray?.shape ?? null;
+    if (shape === null) return;
+    const code = encodeShapeCode(shape);
+    try {
+      await navigator.clipboard.writeText(code);
+      setLibraryNotice('Shape copied. It says what kind of collection this is, not what is in it.');
+    } catch {
+      // The field on screen already holds it, so a refused clipboard is not a
+      // failure worth a message of its own.
+      setLibraryNotice('Copy it from the field: this browser would not take it.');
+    }
+  }, [xray?.shape]);
+
+  /**
+   * Compare this library against a code somebody sent.
+   *
+   * The comparison is of two shapes and says so. What it can turn into something
+   * to play is the last part: the records here that sit in the region both codes
+   * agree on.
+   */
+  const handleCompareShape = useCallback(
+    async (code: string) => {
+      const current = runtime.current;
+      const shape = xray?.shape ?? null;
+      if (current === null || shape === null) return;
+
+      const theirs = decodeShapeCode(code);
+      if (theirs === null) {
+        setComparison(null);
+        setLibraryNotice('That is not a shape code this version wrote.');
+        return;
+      }
+
+      const report = compareShapes(shape, theirs);
+      const tracks = await current.services.repository.allAnalysed();
+      setComparison({ report, common: commonGround(tracks, report) });
+    },
+    [xray?.shape],
+  );
+
+  /** Save the shared set as a playlist that plays anywhere. */
+  const handleSaveCommon = useCallback(() => {
+    const common = comparison?.common ?? [];
+    if (common.length === 0) return;
+
+    const text = buildM3u(
+      common.map((track) => ({
+        path: track.relPath,
+        durationSec: track.durationSec,
+        title: fullTitle(track),
+        note: null,
+      })),
+      {
+        header: [
+          `vibeamp · ${common.length} tracks from the ground two collections share`,
+          'Chosen by measured tempo and key, from this library only.',
+        ],
+      },
+    );
+    downloadBlob(new Blob([text], { type: 'audio/x-mpegurl' }), 'vibeamp-common-ground.m3u');
+    setLibraryNotice(`Saved ${common.length} tracks.`);
+  }, [comparison?.common]);
+
   /**
    * Write the plan out as one file that both plays and reads.
    *
@@ -743,6 +819,12 @@ export function App(): React.JSX.Element {
           onForgetNames={() => void handleForgetNames()}
           want={want}
           onMatchWantList={(text) => void handleMatchWantList(text)}
+          shapeCode={xray.shape === null ? null : encodeShapeCode(xray.shape)}
+          comparison={comparison?.report ?? null}
+          common={comparison?.common ?? []}
+          onCopyShapeCode={() => void handleCopyShapeCode()}
+          onCompareShape={(code) => void handleCompareShape(code)}
+          onSaveCommon={handleSaveCommon}
           working={xray.working}
           initialPosition={libraryPosition}
           narrow={narrow}

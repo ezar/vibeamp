@@ -43,18 +43,7 @@ export const FINGERPRINT_BYTES = FINGERPRINT_SEGMENTS * FINGERPRINT_FRAMES * FIN
  */
 const MAX_LAG = 3;
 
-/**
- * The alphabet the text form uses.
- *
- * Hand-rolled rather than `btoa`, which is absent from some worker environments and
- * deprecated in Node. Sixty-four URL-safe characters, four bytes to six characters
- * would be wasteful — this packs three bytes into four characters, the ordinary
- * base64 ratio, with no padding because the length is fixed and known.
- */
-const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-const REVERSE = new Map<string, number>(
-  [...ALPHABET].map((character, index) => [character, index]),
-);
+import { bytesToText, textToBytes } from './base64url.js';
 
 /**
  * Pack a chroma sequence into the stored text form.
@@ -79,7 +68,7 @@ export function encodeFingerprint(frames: readonly (readonly number[])[]): strin
       at += 1;
     }
   }
-  return toText(bytes);
+  return bytesToText(bytes);
 }
 
 /**
@@ -89,25 +78,7 @@ export function encodeFingerprint(frames: readonly (readonly number[])[]): strin
  *   wrong length, or a character outside the alphabet.
  */
 export function decodeFingerprint(text: string): Uint8Array | null {
-  const expected = Math.ceil(FINGERPRINT_BYTES / 3) * 4;
-  if (text.length !== expected) return null;
-
-  const bytes = new Uint8Array(FINGERPRINT_BYTES);
-  let at = 0;
-  for (let i = 0; i < text.length; i += 4) {
-    let group = 0;
-    for (let j = 0; j < 4; j += 1) {
-      const index = REVERSE.get(text[i + j] ?? '');
-      if (index === undefined) return null;
-      group = group * 64 + index;
-    }
-    for (let j = 2; j >= 0; j -= 1) {
-      if (at + j < FINGERPRINT_BYTES) bytes[at + j] = group & 0xff;
-      group >>>= 8;
-    }
-    at += 3;
-  }
-  return bytes;
+  return textToBytes(text, FINGERPRINT_BYTES);
 }
 
 /**
@@ -208,16 +179,4 @@ function centreByBin(values: Float64Array, frames: number): void {
       values[at] = (values[at] ?? 0) - average;
     }
   }
-}
-
-/** Three bytes to four characters. */
-function toText(bytes: Uint8Array): string {
-  let text = '';
-  for (let i = 0; i < bytes.length; i += 3) {
-    const group = ((bytes[i] ?? 0) << 16) | ((bytes[i + 1] ?? 0) << 8) | (bytes[i + 2] ?? 0);
-    for (let j = 3; j >= 0; j -= 1) {
-      text += ALPHABET[(group >>> (j * 6)) & 63];
-    }
-  }
-  return text;
 }

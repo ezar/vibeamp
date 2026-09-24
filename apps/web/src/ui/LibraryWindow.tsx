@@ -21,6 +21,7 @@ import type {
   LibraryHealth,
   LibraryShape,
   ProposedName,
+  ShapeComparison,
   Track,
   WantReport,
   WantRow,
@@ -58,6 +59,15 @@ export interface LibraryWindowProps {
   want: WantReport | null;
   /** Match a pasted or opened list. */
   onMatchWantList: (text: string) => void;
+  /** This library's own shape code, to send to somebody. */
+  shapeCode: string | null;
+  /** The last comparison against a code somebody sent. */
+  comparison: ShapeComparison | null;
+  /** Records of this library that sit in the ground the two collections share. */
+  common: readonly Track[];
+  onCopyShapeCode: () => void;
+  onCompareShape: (code: string) => void;
+  onSaveCommon: () => void;
   /** True while the two are being computed, which is a pass over the library. */
   working: boolean;
   /** Where the window opens. Ignored on a phone, where it is a block in the page. */
@@ -92,6 +102,12 @@ export function LibraryWindow({
   onForgetNames,
   want,
   onMatchWantList,
+  shapeCode,
+  comparison,
+  common,
+  onCopyShapeCode,
+  onCompareShape,
+  onSaveCommon,
   working,
   initialPosition,
   narrow,
@@ -151,6 +167,17 @@ export function LibraryWindow({
         )}
 
         {shape !== null && <Wanted report={want} onMatch={onMatchWantList} />}
+
+        {shapeCode !== null && (
+          <Compare
+            mine={shapeCode}
+            comparison={comparison}
+            common={common}
+            onCopyCode={onCopyShapeCode}
+            onCompare={onCompareShape}
+            onSaveCommon={onSaveCommon}
+          />
+        )}
 
         {!working && shape !== null && shape.analysed === 0 && (
           <p className="library-note">
@@ -396,7 +423,7 @@ function Health({
   onDeepScan: (() => void) | null;
 }): React.JSX.Element {
   return (
-    <section className="library-section library-section--wide">
+    <section className="library-section library-section--wide library-section--condition">
       <h3>condition</h3>
       {health.findings.length === 0 ? (
         <p className="library-note">
@@ -667,7 +694,7 @@ function Names({
   if (names.length === 0 && namedCount === 0) return null;
 
   return (
-    <section className="library-section library-section--wide">
+    <section className="library-section library-section--wide library-section--names">
       <h3>names</h3>
       {names.length === 0 ? (
         <p className="library-note">
@@ -769,7 +796,7 @@ function Wanted({
   const owned = report?.rows.filter((row) => row.track !== null) ?? [];
 
   return (
-    <section className="library-section library-section--wide">
+    <section className="library-section library-section--wide library-section--want">
       <h3>want list</h3>
       <p className="library-note">
         Paste a list, or open one: an export from a streaming service (.csv), a playlist (.m3u), or
@@ -887,5 +914,128 @@ function ArtistLine({ note }: { note: ArtistNote }): React.JSX.Element {
       {note.island !== null &&
         ` — a corner of the wheel your other ${note.island.size === 1 ? 'track' : `${note.island.size} tracks`} there cannot be mixed out of`}
     </span>
+  );
+}
+
+/** Tracks of the shared set listed before the rest are folded away. */
+const COMMON_SHOWN = 12;
+
+/**
+ * Two collections, side by side, with nothing between them but a short code.
+ *
+ * The question people actually ask each other about music — what have we got in
+ * common, and what have you got that I have never heard — is a question about two
+ * libraries, and every service that could answer it would first have to be told
+ * what both people own. The code carries two histograms and a count: no titles, no
+ * artists, nothing that could be turned back into a list of records.
+ *
+ * What comes out is a resemblance, not an agreement: two collections can overlap
+ * perfectly here and share not one track. So the last part is the only part that
+ * can be played — the records *you* have that sit in the ground you share.
+ */
+function Compare({
+  mine,
+  comparison,
+  common,
+  onCopyCode,
+  onCompare,
+  onSaveCommon,
+}: {
+  /** Your own code, to send. */
+  mine: string;
+  comparison: ShapeComparison | null;
+  common: readonly Track[];
+  onCopyCode: () => void;
+  onCompare: (code: string) => void;
+  onSaveCommon: () => void;
+}): React.JSX.Element {
+  const [code, setCode] = useState('');
+  const shown = common.slice(0, COMMON_SHOWN);
+
+  return (
+    <section className="library-section library-section--wide library-section--compare">
+      <h3>compare</h3>
+      <p className="library-note">
+        Send somebody this code and they can see how your collections line up. It holds two
+        histograms and a count — no titles, no artists, nothing that says what you own.
+      </p>
+      <div className="library-want-actions">
+        <input className="library-code" readOnly value={mine} aria-label="Your shape code" />
+        <button type="button" className="vibe-button" onClick={onCopyCode}>
+          Copy
+        </button>
+      </div>
+      <div className="library-want-actions">
+        <input
+          className="library-code"
+          value={code}
+          placeholder="paste theirs here"
+          aria-label="Their shape code"
+          onChange={(event) => setCode(event.target.value)}
+        />
+        <button
+          type="button"
+          className="vibe-button"
+          disabled={code.trim() === ''}
+          onClick={() => onCompare(code)}
+        >
+          Compare
+        </button>
+      </div>
+
+      {comparison !== null && (
+        <>
+          <ul className="library-findings">
+            {comparison.findings.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <div className="library-want-lists">
+            <Overlap label="tempo" value={comparison.tempoOverlap} />
+            <Overlap label="key" value={comparison.keyOverlap} />
+          </div>
+
+          {shown.length > 0 && (
+            <div className="library-common">
+              <h4>
+                yours, from the ground you share · {common.length}
+                <button type="button" className="vibe-button" onClick={onSaveCommon}>
+                  Save .m3u
+                </button>
+              </h4>
+              <ol>
+                {shown.map((track) => (
+                  <li key={track.id} title={track.relPath}>
+                    {displayName(track)} · {Math.round(track.analysis?.bpm ?? 0)} ·{' '}
+                    {track.analysis?.key.camelot ?? '--'}
+                  </li>
+                ))}
+              </ol>
+              {common.length > shown.length && (
+                <p className="library-note">and {common.length - shown.length} more.</p>
+              )}
+            </div>
+          )}
+          {/* Said whatever the numbers were: the overlap is between two shapes,
+              and two collections can look identical here and share no records. */}
+          <p className="library-legend">
+            A resemblance between two shapes, never a claim about what either of you owns.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** One overlap, as a bar and a number. */
+function Overlap({ label, value }: { label: string; value: number }): React.JSX.Element {
+  return (
+    <div className="library-overlap">
+      <span className="library-overlap-label">{label}</span>
+      <span className="library-overlap-bar">
+        <span style={{ width: `${Math.round(value * 100)}%` }} />
+      </span>
+      <span className="library-overlap-value">{Math.round(value * 100)}%</span>
+    </div>
   );
 }

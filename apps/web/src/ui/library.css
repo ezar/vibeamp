@@ -647,3 +647,85 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- two collections, side by side ---- */
+
+/*
+ * The code itself, in a field rather than in running text: it is meant to be
+ * selected and copied, and on a machine where the clipboard is refused this is
+ * where it still is.
+ */
+.library-code {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 3px 5px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--vibe-display);
+  background: var(--vibe-face-dark);
+  border-top: 1px solid var(--vibe-shadow);
+  border-left: 1px solid var(--vibe-shadow);
+  border-right: 1px solid var(--vibe-light);
+  border-bottom: 1px solid var(--vibe-light);
+}
+
+.library-overlap {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 6px;
+}
+
+.library-overlap-label {
+  color: var(--vibe-light);
+}
+
+.library-overlap-bar {
+  display: block;
+  height: 8px;
+  background: var(--vibe-face-dark);
+  border-top: 1px solid var(--vibe-shadow);
+  border-left: 1px solid var(--vibe-shadow);
+}
+
+.library-overlap-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--vibe-display);
+}
+
+.library-overlap-value {
+  color: var(--vibe-display);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.library-common {
+  margin-top: 8px;
+}
+
+.library-common h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 9px;
+  font-weight: normal;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--vibe-light);
+}
+
+.library-common ol {
+  margin: 0;
+  padding-left: 16px;
+  line-height: 1.7;
+}
+
+.library-common li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

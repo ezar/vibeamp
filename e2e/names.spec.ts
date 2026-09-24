@@ -36,7 +36,7 @@ test('names the files that have none, then finds them with a pasted list', async
     const window_ = page.locator('.library-window');
     await expect(window_.getByText('Reading the library…')).toHaveCount(0, { timeout: 60_000 });
 
-    const names = window_.locator('.library-section', { hasText: 'NAMES' });
+    const names = window_.locator('.library-section--names');
     const rows = names.locator('.library-names > li');
 
     // The one that needed the audio: an untagged re-encode matched to the tagged
@@ -62,7 +62,7 @@ test('names the files that have none, then finds them with a pasted list', async
 
     // Now the list. Two of these three are on the shelf, and one of the two is
     // only findable because of what the analysis heard.
-    const want = window_.locator('.library-section', { hasText: 'WANT LIST' });
+    const want = window_.locator('.library-section--want');
     await want
       .getByLabel('Want list', { exact: true })
       .fill(
