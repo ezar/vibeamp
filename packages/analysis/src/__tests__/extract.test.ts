@@ -183,3 +183,27 @@ function phaseError(measured: number, expected: number, period: number): number 
   const raw = Math.abs(measured - expected) % period;
   return Math.min(raw, period - raw);
 }
+
+describe('where the music starts and stops', () => {
+  it('finds the ends of a track padded with silence', () => {
+    const music = synthTrack(120, 120, [57, 60, 64]);
+    const padded = new Float32Array(RATE * 130);
+    padded.set(music, RATE * 5);
+
+    const features = extractFeatures(padded, RATE);
+    expect(features.soundStartSec ?? -1).toBeCloseTo(5, 0);
+    expect(features.soundEndSec ?? -1).toBeCloseTo(125, 0);
+  });
+
+  it('leaves a track with nothing to trim alone', () => {
+    const features = extractFeatures(synthTrack(120, 120, [57, 60, 64]), RATE);
+    expect(features.soundStartSec ?? -1).toBeLessThan(0.2);
+    expect(features.soundEndSec ?? -1).toBeGreaterThan(119);
+  });
+
+  it('has nothing to say about a file of silence', () => {
+    const features = extractFeatures(new Float32Array(RATE * 60), RATE);
+    expect(features.soundStartSec).toBeNull();
+    expect(features.soundEndSec).toBeNull();
+  });
+});

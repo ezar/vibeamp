@@ -234,6 +234,8 @@ export function normaliseFeatures(raw: RawFeatures, statistics: LibraryStatistic
     sideRatio: raw.sideRatio,
     introBeatSec: raw.introBeatSec,
     outroBeatSec: raw.outroBeatSec,
+    soundStartSec: raw.soundStartSec,
+    soundEndSec: raw.soundEndSec,
     windows: raw.windows,
   };
 }

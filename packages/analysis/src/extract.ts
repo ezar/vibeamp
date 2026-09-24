@@ -12,6 +12,7 @@ import {
   CHROMA_FRAME_SIZE,
   beatGrid,
   chromaSequence,
+  soundEdges,
   chromaVector,
   clippedRatio,
   crestFactor,
@@ -140,6 +141,7 @@ export function extractFeatures(
   const tempo = estimateTempo(envelope);
 
   const edges = beatEdges(samples, sampleRate, tempo);
+  const sound = soundEdges(samples, sampleRate);
 
   report('tonal', 0.7);
   const chroma = averageChroma(samples, sampleRate, plan.descriptor);
@@ -180,6 +182,10 @@ export function extractFeatures(
     sideRatio: options.sideRatio ?? null,
     introBeatSec: edges.introBeatSec,
     outroBeatSec: edges.outroBeatSec,
+    // Over the whole signal, like the tail and the clipping: this is about the
+    // file, and the descriptor windows are placed to avoid looking at its ends.
+    soundStartSec: sound?.startSec ?? null,
+    soundEndSec: sound?.endSec ?? null,
     windows,
   };
 

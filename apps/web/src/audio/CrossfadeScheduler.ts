@@ -25,6 +25,11 @@ export interface CrossfadeSource {
   duration(): number;
   currentUrl(): string | null;
   getCrossfadeSeconds(): number;
+  /**
+   * When the music on the current track stops, in seconds, or null when nothing
+   * was measured. See `edges.ts`.
+   */
+  soundEndSeconds(): number | null;
 }
 
 /**
@@ -80,9 +85,14 @@ export class CrossfadeScheduler {
     // A stream, or a track whose metadata has not arrived, has no end to aim at.
     if (!Number.isFinite(duration) || duration <= 0) return;
     if (!Number.isFinite(elapsed) || elapsed < 0) return;
-    if (duration < fade * MIN_TRACK_MULTIPLE) return;
 
-    if (duration - elapsed > fade) return;
+    // The end of the music, not the end of the file. A rip that kept four seconds
+    // of run-out would otherwise put four seconds of silence in the middle of a
+    // set, which is exactly what a cross-fade is for avoiding.
+    const end = endOfMusic(duration, media.soundEndSeconds());
+    if (end < fade * MIN_TRACK_MULTIPLE) return;
+
+    if (end - elapsed > fade) return;
     // Advancing with nothing to advance into would stop playback early rather than
     // fade into anything.
     if (!hasNext()) return;
@@ -90,4 +100,18 @@ export class CrossfadeScheduler {
     this.firedFor = url;
     advance();
   }
+}
+
+/**
+ * Where a track effectively ends.
+ *
+ * The measurement when there is one and it is usable; the file's length otherwise.
+ * A measurement past the end of the file, or at zero, is ignored rather than
+ * trusted — the first would do nothing and the second would end every track
+ * immediately.
+ */
+function endOfMusic(durationSec: number, soundEndSec: number | null): number {
+  if (soundEndSec === null || !Number.isFinite(soundEndSec)) return durationSec;
+  if (soundEndSec <= 0 || soundEndSec > durationSec) return durationSec;
+  return soundEndSec;
 }

@@ -38,9 +38,21 @@ export const MAX_CROSSFADE_SEC = 12;
  * about tracks — and neither a fade nor a level can wait for a database read, since
  * both are happening now.
  */
-export type PlaybackLookup = (
-  url: string | null,
-) => { intro: TrackGrid | null; outro: TrackGrid | null; trimDb: number } | null;
+export type PlaybackLookup = (url: string | null) => {
+  intro: TrackGrid | null;
+  outro: TrackGrid | null;
+  trimDb: number;
+  soundStartSec: number | null;
+  soundEndSec: number | null;
+} | null;
+
+/**
+ * Silence at the head of a file worth skipping, in seconds.
+ *
+ * Half a second. Below that, skipping it is not something anybody would notice,
+ * and a seek nobody notices is a seek not worth making.
+ */
+const MIN_TRIMMED_SILENCE_SEC = 0.5;
 
 /** FFT size for the visualiser. Webamp's own spectrum analyser expects this. */
 const FFT_SIZE = 2048;
@@ -228,11 +240,17 @@ export class VibeampMedia {
       const outgoing = this.current;
       this.activeDeck = this.activeDeck === 0 ? 1 : 0;
       await this.play();
+      // Before the fade rather than during it, so the beat alignment inside the
+      // fade starts from where the music actually begins.
+      this.trimHead(target);
       this.crossfade(outgoing, target);
       return;
     }
 
-    if (autoPlay) await this.play();
+    if (autoPlay) {
+      await this.play();
+      this.trimHead(this.current);
+    }
   }
 
   dispose(): void {
@@ -282,6 +300,18 @@ export class VibeampMedia {
   /** Where to find what a URL needs at playback time. */
   setPlaybackLookup(lookup: PlaybackLookup): void {
     this.playback = lookup;
+  }
+
+  /**
+   * When the music on the active deck stops, in seconds, or null when nothing was
+   * measured.
+   *
+   * What the cross-fade scheduler aims at instead of the file's length. A rip that
+   * kept four seconds of run-out otherwise leaves four seconds of silence in the
+   * middle of a set.
+   */
+  soundEndSeconds(): number | null {
+    return this.playback(this.current.url)?.soundEndSec ?? null;
   }
 
   // ---- internals ----
@@ -372,6 +402,27 @@ export class VibeampMedia {
   private applyTrim(deck: Deck): void {
     const db = this.levelling ? (this.playback(deck.url)?.trimDb ?? 0) : 0;
     deck.trim.gain.value = dbToGain(db);
+  }
+
+  /**
+   * Skip whatever silence a file begins with.
+   *
+   * Only silence: the measurement's floor is forty decibels below the track's own
+   * level, so a quiet intro is never cut. Run after `play()` has resolved, which
+   * is the point at which the element certainly has a duration to check against.
+   *
+   * The seek is inaudible because what is being skipped is, by definition, nothing.
+   */
+  private trimHead(deck: Deck): void {
+    const startSec = this.playback(deck.url)?.soundStartSec ?? null;
+    if (startSec === null || startSec < MIN_TRIMMED_SILENCE_SEC) return;
+
+    // A measurement that claims a quarter of the file is silence is more likely to
+    // be wrong than the file is to be that strange, and the cost of believing it is
+    // skipping the music.
+    const duration = deck.element.duration;
+    if (Number.isFinite(duration) && startSec > duration / 4) return;
+    deck.element.currentTime = startSec;
   }
 
   /** Ramp `outgoing` down and `incoming` up over the cross-fade length. */

@@ -29,6 +29,8 @@ export { estimateTempo, MIN_BPM, MAX_BPM } from './tempo.js';
 export type { TempoEstimate } from './tempo.js';
 export { beatGrid, MIN_GRID_STRENGTH } from './beats.js';
 export type { BeatGrid } from './beats.js';
+export { soundEdges, EDGE_FLOOR_DB, EDGE_MIN_RUN_SEC } from './edges.js';
+export type { SoundEdges } from './edges.js';
 export { chromaVector, chromaSequence, CHROMA_FRAME_SIZE } from './chroma.js';
 export { estimateKey, PITCH_CLASS_NAMES } from './key.js';
 export type { KeyEstimate, KeyScale, PitchClassName } from './key.js';

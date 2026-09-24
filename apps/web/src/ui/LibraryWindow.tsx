@@ -580,6 +580,7 @@ const ISSUE_LABELS: Record<HealthFinding['issue'], string> = {
   'fake-stereo': 'fake stereo',
   'abrupt-end': 'ends abruptly',
   clipped: 'clipped',
+  'dead-air': 'silence at the ends',
 };
 
 function Issue({ finding }: { finding: HealthFinding }): React.JSX.Element {

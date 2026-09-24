@@ -46,6 +46,8 @@ export function makeTrack(spec: TrackSpec): Track {
     sideRatio: 0.4,
     introBeatSec: 0,
     outroBeatSec: null,
+    soundStartSec: 0,
+    soundEndSec: 180,
     windows: [],
   };
 

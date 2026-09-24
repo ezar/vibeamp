@@ -8,6 +8,8 @@ class FakeMedia implements CrossfadeSource {
   elapsed = 0;
   length = 200;
   fade = 4;
+  /** Where the music stops, when something measured it. */
+  soundEnd: number | null = null;
 
   on(): () => void {
     return () => undefined;
@@ -23,6 +25,9 @@ class FakeMedia implements CrossfadeSource {
   }
   getCrossfadeSeconds(): number {
     return this.fade;
+  }
+  soundEndSeconds(): number | null {
+    return this.soundEnd;
   }
 }
 
@@ -164,6 +169,7 @@ describe('CrossfadeScheduler', () => {
         duration: () => media.duration(),
         currentUrl: () => media.currentUrl(),
         getCrossfadeSeconds: () => media.getCrossfadeSeconds(),
+        soundEndSeconds: () => media.soundEndSeconds(),
       },
       advance: () => undefined,
       hasNext: () => true,
@@ -172,5 +178,40 @@ describe('CrossfadeScheduler', () => {
     scheduler.start();
     scheduler.stop();
     expect(unsubscribed).toBe(true);
+  });
+
+  it('aims at the end of the music, not the end of the file', () => {
+    // A rip that kept twenty seconds of run-out. Aiming at the file's length puts
+    // twenty seconds of silence in the middle of a set, which is the one thing a
+    // cross-fade exists to avoid.
+    const { media, scheduler, advanced } = setup();
+    media.length = 200;
+    media.soundEnd = 180;
+
+    media.elapsed = 174;
+    scheduler.check();
+    expect(advanced()).toBe(0);
+
+    media.elapsed = 176;
+    scheduler.check();
+    expect(advanced()).toBe(1);
+  });
+
+  it('ignores a measurement it cannot use', () => {
+    const { media, scheduler, advanced } = setup();
+    media.length = 200;
+    // Past the end of the file, and at zero: the first would do nothing, the
+    // second would end every track the moment it started.
+    for (const soundEnd of [260, 0, -5, Number.NaN]) {
+      media.soundEnd = soundEnd;
+      media.elapsed = 180;
+      scheduler.check();
+    }
+    expect(advanced()).toBe(0);
+
+    media.soundEnd = null;
+    media.elapsed = 197;
+    scheduler.check();
+    expect(advanced()).toBe(1);
   });
 });

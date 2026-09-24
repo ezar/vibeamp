@@ -18,7 +18,7 @@ export type KeyScale = 'major' | 'minor';
  * every track analysed by an older version as pending, which is what lets the
  * pipeline improve without a rescan and without losing the rest of the record.
  */
-export const ANALYSIS_VERSION = 4;
+export const ANALYSIS_VERSION = 5;
 
 /** Sample rate the analysis runs at, in hertz. */
 export const TARGET_SAMPLE_RATE = 16000;
@@ -111,6 +111,10 @@ export interface RawFeatures {
   introBeatSec: number | null;
   /** The same near the end, in seconds from the start of the track. */
   outroBeatSec: number | null;
+  /** When the music starts, in seconds. Null for a file of silence. See `edges.ts`. */
+  soundStartSec: number | null;
+  /** When it stops, in seconds from the start of the file. */
+  soundEndSec: number | null;
   windows: WindowFeatures[];
 }
 
@@ -212,6 +216,19 @@ export interface TrackAnalysis {
    * chorus is the only part a fade ever touches.
    */
   outroBeatSec: number | null;
+  /**
+   * When the music starts, in seconds from the start of the file.
+   *
+   * A file's length and a recording's length are different things, and every
+   * collection is full of the difference: a rip that kept the lead-in, a download
+   * padded by its encoder, a track with the run-out left on. Dead air only — the
+   * floor sits forty decibels below the track's own level, so a quiet intro is
+   * never mistaken for silence, and a fade-out is not trimmed. Null for a file with
+   * nothing in it.
+   */
+  soundStartSec: number | null;
+  /** When it stops, in seconds from the start of the file. See {@link soundStartSec}. */
+  soundEndSec: number | null;
   windows: WindowFeatures[];
 }
 

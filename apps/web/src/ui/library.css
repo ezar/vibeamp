@@ -500,7 +500,8 @@
   background: var(--vibe-display);
 }
 
-.library-issue--path {
+.library-issue--path,
+.library-issue--dead-air {
   background: var(--vibe-warning);
 }
 

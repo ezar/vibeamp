@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { libraryHealth } from '../health.js';
 import { toCamelot } from '../camelot.js';
+import { ANALYSIS_VERSION } from '../types.js';
 import type { Track, TrackAnalysis, TrackStatus } from '../types.js';
 
 interface Spec {
@@ -21,6 +22,8 @@ interface Spec {
   tailRatio?: number;
   clippedRatio?: number;
   sideRatio?: number | null;
+  soundStartSec?: number | null;
+  soundEndSec?: number | null;
 }
 
 function makeTrack(spec: Spec): Track {
@@ -47,6 +50,8 @@ function makeTrack(spec: Spec): Track {
     sideRatio: spec.sideRatio === undefined ? 0.3 : spec.sideRatio,
     introBeatSec: 0,
     outroBeatSec: null,
+    soundStartSec: spec.soundStartSec === undefined ? 0 : spec.soundStartSec,
+    soundEndSec: spec.soundEndSec === undefined ? 200 : spec.soundEndSec,
     windows: [],
   };
 
@@ -70,7 +75,7 @@ function makeTrack(spec: Spec): Track {
       hasCoverArt: false,
     },
     analysis: analysed ? analysis : null,
-    analysisVersion: spec.analysisVersion ?? 3,
+    analysisVersion: spec.analysisVersion ?? ANALYSIS_VERSION,
     analyzedAt: analysed ? 1 : null,
     status: spec.status ?? (analysed ? 'done' : 'pending'),
     attempts: 0,
@@ -240,5 +245,34 @@ describe('what it admits it cannot see', () => {
         line.includes('mixed down'),
       ),
     ).toBe(true);
+  });
+});
+
+describe('silence at the ends', () => {
+  it('names the files padded with it, worst first', () => {
+    const health = libraryHealth([
+      makeTrack({ id: 'clean' }),
+      // Five seconds of lead-in, twelve of run-out, and twenty-six of both: the
+      // list is ordered by how much silence there is, not by which end it is at.
+      makeTrack({ id: 'lead-in', soundStartSec: 5 }),
+      makeTrack({ id: 'run-out', soundEndSec: 188 }),
+      makeTrack({ id: 'both', soundStartSec: 6, soundEndSec: 180 }),
+    ]);
+    const finding = health.findings.find((entry) => entry.issue === 'dead-air');
+    expect(finding?.tracks.map((track) => track.id)).toEqual(['both', 'run-out', 'lead-in']);
+  });
+
+  it('leaves a second of run-out alone, because that is how a record ends', () => {
+    const health = libraryHealth([makeTrack({ id: 'ordinary', soundEndSec: 199 })]);
+    expect(health.findings.some((entry) => entry.issue === 'dead-air')).toBe(false);
+  });
+
+  it('says nothing about a track analysed before this was measured', () => {
+    // Its descriptors carry no edges at all, and reading their absence as zero
+    // would report a padded file as clean and a clean one as padded.
+    const health = libraryHealth([
+      makeTrack({ id: 'old', analysisVersion: 4, soundStartSec: null, soundEndSec: null }),
+    ]);
+    expect(health.findings.some((entry) => entry.issue === 'dead-air')).toBe(false);
   });
 });

@@ -54,11 +54,16 @@ test('finds the defects in the files and leaves the healthy ones alone', async (
     );
     await expect(issue('clipped')).toContainText(library.defects.clipped.replace('.wav', ''));
     await expect(issue('empty')).toContainText(library.defects.silent.replace('.wav', ''));
+    await expect(issue('silence at the ends')).toContainText(
+      library.defects.padded.replace('.wav', ''),
+    );
 
     // The two built to look broken. A loud master is not a clipped one, and a track
     // that stops on the beat is a genre rather than a truncated download.
     await expect(issue('clipped')).not.toContainText('loud-master');
     await expect(issue('fake stereo')).not.toContainText('healthy');
+    // A fade is the end of the music, not silence after it.
+    await expect(issue('silence at the ends')).not.toContainText('healthy');
 
     // Stated whether or not anything was found: a check that cannot see transcodes
     // must not let its silence be read as "no transcodes".

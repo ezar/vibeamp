@@ -31,6 +31,10 @@ export interface UrlPlayback {
   outro: TrackGrid | null;
   /** How much to move this track's level, in decibels. See `levelling.ts`. */
   trimDb: number;
+  /** When the music starts, in seconds, or null when nothing was measured. */
+  soundStartSec: number | null;
+  /** When it stops, in seconds from the start of the file. */
+  soundEndSec: number | null;
 }
 
 export class PlaylistBridge {
@@ -144,6 +148,8 @@ export class PlaylistBridge {
       intro: gridOf(track, false),
       outro: gridOf(track, true),
       trimDb: trimDb(track, this.loudnessReferenceDb),
+      soundStartSec: track.analysis?.soundStartSec ?? null,
+      soundEndSec: track.analysis?.soundEndSec ?? null,
     });
 
     return {

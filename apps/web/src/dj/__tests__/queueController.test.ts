@@ -68,6 +68,8 @@ function makeTrack(id: string): Track {
       sideRatio: 0.4,
       introBeatSec: 0,
       outroBeatSec: null,
+      soundStartSec: 0,
+      soundEndSec: 180,
       windows: [],
     },
     analysisVersion: 1,
