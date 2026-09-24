@@ -26,6 +26,8 @@ import type {
   WantReport,
   WantRow,
 } from '@vibeamp/core';
+import { DEFAULT_JOURNEY_STEPS } from '@vibeamp/dj';
+import type { JourneyStep } from '@vibeamp/dj';
 import { useDraggable } from './useDraggable.js';
 import './library.css';
 
@@ -68,12 +70,29 @@ export interface LibraryWindowProps {
   onCopyShapeCode: () => void;
   onCompareShape: (code: string) => void;
   onSaveCommon: () => void;
+  /** Every analysed track, for the journey pickers. */
+  catalogue: readonly CatalogueEntry[];
+  /** What is playing, so a journey can start from where you are. */
+  nowPlayingId: string | null;
+  /** The last route planned. Empty when the planner could not find one. */
+  journey: readonly JourneyStep[] | null;
+  journeyPlanning: boolean;
+  onPlanJourney: (fromId: string, toId: string, steps: number) => void;
+  onPlayJourney: () => void;
+  onSaveJourney: () => void;
   /** True while the two are being computed, which is a pass over the library. */
   working: boolean;
   /** Where the window opens. Ignored on a phone, where it is a block in the page. */
   initialPosition: { x: number; y: number };
   narrow: boolean;
   onClose: () => void;
+}
+
+/** One track, as the journey pickers need it. */
+export interface CatalogueEntry {
+  id: string;
+  /** What to call it, and what somebody types to find it. */
+  label: string;
 }
 
 /** One reading, already joined to the track it belongs to. */
@@ -108,6 +127,13 @@ export function LibraryWindow({
   onCopyShapeCode,
   onCompareShape,
   onSaveCommon,
+  catalogue,
+  nowPlayingId,
+  journey,
+  journeyPlanning,
+  onPlanJourney,
+  onPlayJourney,
+  onSaveJourney,
   working,
   initialPosition,
   narrow,
@@ -167,6 +193,18 @@ export function LibraryWindow({
         )}
 
         {shape !== null && <Wanted report={want} onMatch={onMatchWantList} />}
+
+        {shape !== null && (
+          <Journey
+            catalogue={catalogue}
+            nowPlayingId={nowPlayingId}
+            route={journey}
+            planning={journeyPlanning}
+            onPlan={onPlanJourney}
+            onPlay={onPlayJourney}
+            onSave={onSaveJourney}
+          />
+        )}
 
         {shapeCode !== null && (
           <Compare
@@ -1038,5 +1076,205 @@ function Overlap({ label, value }: { label: string; value: number }): React.JSX.
       </span>
       <span className="library-overlap-value">{Math.round(value * 100)}%</span>
     </div>
+  );
+}
+
+/** Names offered in the journey pickers at once. */
+const CATALOGUE_SHOWN = 60;
+
+/**
+ * Getting from one record to another.
+ *
+ * The auto-DJ answers "what next", which is the question a radio asks. This is the
+ * one a DJ asks: how do I get from here to there. Name the two ends and the route
+ * between them is laid out, each step a move the planner would have been willing to
+ * make anyway, with the reason for it printed beside it.
+ *
+ * Only a collection somebody has listened to can answer it. A service knows what
+ * its catalogue is filed under; it does not know that these two records are four
+ * moves apart, because nothing it stores is a distance.
+ */
+function Journey({
+  catalogue,
+  nowPlayingId,
+  route,
+  planning,
+  onPlan,
+  onPlay,
+  onSave,
+}: {
+  catalogue: readonly CatalogueEntry[];
+  nowPlayingId: string | null;
+  route: readonly JourneyStep[] | null;
+  planning: boolean;
+  onPlan: (fromId: string, toId: string, steps: number) => void;
+  onPlay: () => void;
+  onSave: () => void;
+}): React.JSX.Element | null {
+  const playing = catalogue.find((entry) => entry.id === nowPlayingId) ?? null;
+  const [fromText, setFromText] = useState(playing?.label ?? '');
+  const [toText, setToText] = useState('');
+  const [steps, setSteps] = useState(DEFAULT_JOURNEY_STEPS);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  const byLabel = useMemo(() => {
+    const map = new Map<string, CatalogueEntry>();
+    for (const entry of catalogue) if (!map.has(entry.label)) map.set(entry.label, entry);
+    return map;
+  }, [catalogue]);
+
+  if (catalogue.length < 4) return null;
+
+  const resolve = (text: string): CatalogueEntry | null => {
+    const wanted = text.trim();
+    if (wanted === '') return null;
+    const exact = byLabel.get(wanted);
+    if (exact !== undefined) return exact;
+    // One partial match is an answer; several is a question, and picking one of
+    // them would send somebody somewhere they did not ask to go.
+    const folded = wanted.toLowerCase();
+    const matches = catalogue.filter((entry) => entry.label.toLowerCase().includes(folded));
+    return matches.length === 1 ? (matches[0] ?? null) : null;
+  };
+
+  const plan = (): void => {
+    const from = resolve(fromText);
+    const to = resolve(toText);
+    if (from === null || to === null) {
+      setProblem('Type enough of a title to name one track, or pick one from the list.');
+      return;
+    }
+    if (from.id === to.id) {
+      setProblem('That is the same record at both ends.');
+      return;
+    }
+    setProblem(null);
+    onPlan(from.id, to.id, steps);
+  };
+
+  return (
+    <section className="library-section library-section--wide library-section--journey">
+      <h3>journey</h3>
+      <p className="library-note">
+        Name where you are and where you want to end up. The route between them is built from your
+        own records, one defensible move at a time — nothing is sped up or slowed down.
+      </p>
+
+      <div className="library-journey-ends">
+        <Picker
+          label="from"
+          value={fromText}
+          onChange={setFromText}
+          catalogue={catalogue}
+          listId="journey-from"
+        />
+        <Picker
+          label="to"
+          value={toText}
+          onChange={setToText}
+          catalogue={catalogue}
+          listId="journey-to"
+        />
+      </div>
+
+      <div className="library-want-actions">
+        <label htmlFor="journey-steps">steps</label>
+        <select
+          id="journey-steps"
+          className="library-journey-steps"
+          value={steps}
+          onChange={(event) => setSteps(Number(event.target.value))}
+        >
+          {[2, 4, 6, 8, 12, 16].map((count) => (
+            <option key={count} value={count}>
+              {count}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="vibe-button" disabled={planning} onClick={plan}>
+          {planning ? 'Planning…' : 'Plan'}
+        </button>
+        {route !== null && route.length > 0 && (
+          <>
+            <button type="button" className="vibe-button" onClick={onPlay}>
+              Play it
+            </button>
+            <button type="button" className="vibe-button" onClick={onSave}>
+              Save .m3u
+            </button>
+          </>
+        )}
+      </div>
+
+      {problem !== null && <p className="library-legend library-legend--warn">{problem}</p>}
+
+      {route !== null &&
+        (route.length === 0 ? (
+          <p className="library-note">
+            No route between those two: there is not enough analysed music in between to make one
+            without jumping. Fewer steps may find one.
+          </p>
+        ) : (
+          <ol className="library-journey">
+            {route.map((step, index) => (
+              <li key={`${step.track.id}-${index}`}>
+                <span className="library-journey-title" title={step.track.relPath}>
+                  {displayName(step.track)}
+                </span>
+                <span className="library-journey-meta">
+                  {Math.round(step.track.analysis?.bpm ?? 0)} · {step.track.analysis?.key.camelot}
+                </span>
+                {step.transition !== null && (
+                  <span className="library-journey-move">{step.transition.summary}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+        ))}
+    </section>
+  );
+}
+
+/** One end of a journey: a box to type in, with the library behind it. */
+function Picker({
+  label,
+  value,
+  onChange,
+  catalogue,
+  listId,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  catalogue: readonly CatalogueEntry[];
+  listId: string;
+}): React.JSX.Element {
+  // Filtered as you type and capped: a datalist holding ten thousand options is
+  // ten thousand DOM nodes, and nobody reads past the first few anyway.
+  const options = useMemo(() => {
+    const folded = value.trim().toLowerCase();
+    const matches =
+      folded === ''
+        ? catalogue
+        : catalogue.filter((entry) => entry.label.toLowerCase().includes(folded));
+    return matches.slice(0, CATALOGUE_SHOWN);
+  }, [catalogue, value]);
+
+  return (
+    <label className="library-journey-end">
+      <span>{label}</span>
+      <input
+        className="library-code"
+        list={listId}
+        value={value}
+        placeholder="type a title"
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <datalist id={listId}>
+        {options.map((entry) => (
+          <option key={entry.id} value={entry.label} />
+        ))}
+      </datalist>
+    </label>
   );
 }

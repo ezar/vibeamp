@@ -730,3 +730,69 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- from here to there ---- */
+
+.library-journey-ends {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.library-journey-end {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.library-journey-end > span {
+  color: var(--vibe-light);
+}
+
+.library-journey-steps {
+  font: inherit;
+  font-size: 10px;
+}
+
+.library-journey {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+
+.library-journey > li {
+  padding-bottom: 5px;
+}
+
+.library-journey-title {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  color: var(--vibe-display);
+}
+
+.library-journey-meta {
+  margin-left: 6px;
+  color: var(--vibe-light);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The move that got here, under the track it got to: a route is a list of
+   transitions as much as it is a list of records. */
+.library-journey-move {
+  display: block;
+  font-size: 9px;
+  line-height: 1.4;
+  color: var(--vibe-light);
+}
+
+@media (max-width: 720px) {
+  .library-journey-ends {
+    grid-template-columns: 1fr;
+  }
+}

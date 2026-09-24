@@ -17,6 +17,9 @@ import { writeLibrary } from './fixtures/library.js';
 /** One over the threshold, so the auto-DJ is available without analysing more. */
 const TRACK_COUNT = MIN_ANALYSED_TRACKS + 2;
 
+/** Rows the vibe window shows of the queue. Mirrors `QUEUE_PREVIEW` in the panel. */
+const QUEUE_PREVIEW = 4;
+
 const library = writeLibrary(TRACK_COUNT);
 
 test.afterAll(() => {
@@ -107,8 +110,21 @@ test('replans when a slider moves, without touching what is already queued', asy
   // shell: the first entries are committed and must survive, the tail must not.
   const vibe = page.locator('.vibe-window');
   await vibe.getByRole('button', { name: 'AUTO-DJ' }).click();
+
+  // Paused, because switching the auto-DJ on starts playback and the fixture
+  // tracks are ten seconds long. A track ending mid-test hands the next one to the
+  // shell and shifts the queue by one — a real change, correctly made, that this
+  // test would then blame on the slider. Pausing removes the confound; nothing
+  // here needs playback to be running.
+  await page.locator('#pause').click();
+
   const rows = vibe.locator('.vibe-queue li');
-  await expect(rows.first()).toBeVisible({ timeout: 30_000 });
+  // Waited for a *full* preview rather than a first row: the queue fills as the
+  // shell is handed tracks, and reading it part way through captures a list that
+  // is about to change on its own. The assertion below then blames the slider for
+  // a difference the slider did not make. This is the same unsynchronised read
+  // that once made this file look flaky, in another place.
+  await expect(rows).toHaveCount(QUEUE_PREVIEW, { timeout: 30_000 });
 
   const before = await rows.allTextContents();
   await vibe.getByRole('button', { name: 'late', exact: true }).click();
@@ -116,6 +132,7 @@ test('replans when a slider moves, without touching what is already queued', asy
     .poll(async () => (await rows.allTextContents()).join('|'), { timeout: 30_000 })
     .not.toBe(before.join('|'));
 
+  await expect(rows).toHaveCount(QUEUE_PREVIEW);
   const after = await rows.allTextContents();
   expect(after[0]).toBe(before[0]);
 });
