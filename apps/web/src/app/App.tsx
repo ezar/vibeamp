@@ -42,8 +42,27 @@ import {
   parseExport,
   promptForExport,
 } from '../library/exchange.js';
-import { findDuplicates, libraryHealth, libraryShape } from '@vibeamp/core';
-import type { DuplicateGroup, LibraryHealth, LibraryShape, Track } from '@vibeamp/core';
+import {
+  commonGround,
+  compareShapes,
+  decodeShapeCode,
+  encodeShapeCode,
+  findDuplicates,
+  libraryHealth,
+  libraryShape,
+  matchWantList,
+  proposeNames,
+} from '@vibeamp/core';
+import { parseWantList } from '../library/wantList.js';
+import type {
+  DuplicateGroup,
+  LibraryHealth,
+  LibraryShape,
+  ProposedName,
+  ShapeComparison,
+  Track,
+  WantReport,
+} from '@vibeamp/core';
 import type { VibePreset } from '@vibeamp/dj';
 import { vibeFromUrl, vibeLink } from './vibeLink.js';
 import { defaultWorkerCount } from '../analysis/pool.js';
@@ -82,7 +101,18 @@ export function App(): React.JSX.Element {
     shape: LibraryShape | null;
     duplicates: readonly DuplicateGroup[] | null;
     health: LibraryHealth | null;
+    names: readonly ProposedName[] | null;
+    namedCount: number;
     working: boolean;
+  } | null>(null);
+  // The last list somebody matched. Kept beside the X-ray rather than inside it
+  // because it survives a re-measure: nobody wants to paste the list again.
+  const [want, setWant] = useState<WantReport | null>(null);
+  // A collection compared against a code somebody sent, and the records of this
+  // library that sit in the ground the two share.
+  const [comparison, setComparison] = useState<{
+    report: ShapeComparison;
+    common: readonly Track[];
   } | null>(null);
   const narrow = useIsNarrow();
   const store = useAppStore();
@@ -180,6 +210,10 @@ export function App(): React.JSX.Element {
 
       runtime.current = { services, host, bridge, queue, runner: null, skins, crossfade };
       host.media.setCrossfadeSeconds(useAppStore.getState().crossfadeSec);
+      host.media.setBeatAlign(useAppStore.getState().beatAlign);
+      // The engine works in URLs and knows nothing about tracks; the bridge is
+      // where a track and its URL meet, so that is where the grids live.
+      host.media.setGridLookup((url) => bridge.gridsForUrl(url));
 
       const counts = await services.repository.counts();
       useAppStore.getState().setAnalysedCount(counts.done);
@@ -452,17 +486,148 @@ export function App(): React.JSX.Element {
     const current = runtime.current;
     if (current === null) return;
 
-    setXray({ shape: null, duplicates: null, health: null, working: true });
+    setXray({
+      shape: null,
+      duplicates: null,
+      health: null,
+      names: null,
+      namedCount: 0,
+      working: true,
+    });
     const tracks = await current.services.repository.allTracks();
-    // Yielded to once more so the window paints before the two passes begin.
+    // Yielded to once more so the window paints before the passes begin.
     await new Promise((resolve) => setTimeout(resolve, 0));
     setXray({
       shape: libraryShape(tracks),
       duplicates: findDuplicates(tracks),
       health: libraryHealth(tracks),
+      names: proposeNames(tracks),
+      namedCount: tracks.filter((track) => (track.given ?? null) !== null).length,
       working: false,
     });
   }, []);
+
+  /**
+   * Store the names worked out for the files that have none.
+   *
+   * Into this library's index, never into the file: see `repository.applyNames`.
+   * The list is re-measured afterwards, so the accepted rows leave the window and
+   * the want list can immediately find the files they named.
+   */
+  const handleAcceptNames = useCallback(async () => {
+    const current = runtime.current;
+    if (current === null) return;
+    const proposals = xray?.names ?? [];
+    if (proposals.length === 0) return;
+
+    const changed = await current.services.repository.applyNames(proposals);
+    setLibraryNotice(`Named ${changed} ${changed === 1 ? 'file' : 'files'}.`);
+    await handleOpenLibrary();
+  }, [xray?.names, handleOpenLibrary]);
+
+  /** Drop every name this library gave itself. The tags were never touched. */
+  const handleForgetNames = useCallback(async () => {
+    const current = runtime.current;
+    if (current === null) return;
+    const forgotten = await current.services.repository.forgetNames();
+    setLibraryNotice(`Forgot ${forgotten} ${forgotten === 1 ? 'name' : 'names'}.`);
+    await handleOpenLibrary();
+  }, [handleOpenLibrary]);
+
+  /**
+   * Match a list of names against the library.
+   *
+   * The proposals go in with it, so a file whose only claim to a name came from its
+   * sound is findable by a list that names it — which is the whole reason this is
+   * in a player that listens to its own files.
+   */
+  const handleMatchWantList = useCallback(
+    async (text: string) => {
+      const current = runtime.current;
+      if (current === null) return;
+
+      const entries = parseWantList(text);
+      if (entries.length === 0) {
+        setWant(null);
+        setLibraryNotice('Nothing in that list that looks like a track.');
+        return;
+      }
+
+      const tracks = await current.services.repository.allTracks();
+      setWant(
+        matchWantList(entries, tracks, {
+          names: xray?.names ?? proposeNames(tracks),
+          shape: xray?.shape ?? libraryShape(tracks),
+        }),
+      );
+    },
+    [xray?.names, xray?.shape],
+  );
+
+  /** Copy this library's shape: two histograms and a count, and nothing else. */
+  const handleCopyShapeCode = useCallback(async () => {
+    const shape = xray?.shape ?? null;
+    if (shape === null) return;
+    const code = encodeShapeCode(shape);
+    try {
+      await navigator.clipboard.writeText(code);
+      setLibraryNotice('Shape copied. It says what kind of collection this is, not what is in it.');
+    } catch {
+      // The field on screen already holds it, so a refused clipboard is not a
+      // failure worth a message of its own.
+      setLibraryNotice('Copy it from the field: this browser would not take it.');
+    }
+  }, [xray?.shape]);
+
+  /**
+   * Compare this library against a code somebody sent.
+   *
+   * The comparison is of two shapes and says so. What it can turn into something
+   * to play is the last part: the records here that sit in the region both codes
+   * agree on.
+   */
+  const handleCompareShape = useCallback(
+    async (code: string) => {
+      const current = runtime.current;
+      const shape = xray?.shape ?? null;
+      if (current === null || shape === null) return;
+
+      const theirs = decodeShapeCode(code);
+      if (theirs === null) {
+        setComparison(null);
+        setLibraryNotice('That is not a shape code this version wrote.');
+        return;
+      }
+
+      const report = compareShapes(shape, theirs);
+      const tracks = await current.services.repository.allAnalysed();
+      setComparison({ report, common: commonGround(tracks, report) });
+    },
+    [xray?.shape],
+  );
+
+  /** Save the shared set as a playlist that plays anywhere. */
+  const handleSaveCommon = useCallback(() => {
+    const common = comparison?.common ?? [];
+    if (common.length === 0) return;
+
+    const text = buildM3u(
+      common.map((track) => ({
+        path: track.relPath,
+        durationSec: track.durationSec,
+        title: fullTitle(track),
+        note: null,
+      })),
+      {
+        header: [
+          `vibeamp · ${common.length} tracks from the ground two collections share`,
+          'Chosen by measured tempo and key, from this library only.',
+        ],
+      },
+    );
+    downloadBlob(new Blob([text], { type: 'audio/x-mpegurl' }), 'vibeamp-common-ground.m3u');
+    setLibraryNotice(`Saved ${common.length} tracks.`);
+  }, [comparison?.common]);
 
   /**
    * Write the plan out as one file that both plays and reads.
@@ -557,6 +722,11 @@ export function App(): React.JSX.Element {
     runtime.current?.host.media.setCrossfadeSeconds(seconds);
   }, []);
 
+  const handleBeatAlignChange = useCallback((enabled: boolean) => {
+    useAppStore.getState().setBeatAlign(enabled);
+    runtime.current?.host.media.setBeatAlign(enabled);
+  }, []);
+
   /** Load a `.wsz` the user brings. The app ships none of its own. */
   const handleLoadSkin = useCallback(async () => {
     const current = runtime.current;
@@ -628,6 +798,8 @@ export function App(): React.JSX.Element {
           onCommit={handleCommit}
           crossfadeSec={store.crossfadeSec}
           onCrossfadeChange={handleCrossfadeChange}
+          beatAlign={store.beatAlign}
+          onBeatAlignChange={handleBeatAlignChange}
           onShapeChange={store.setEnergyShape}
           onToggleAutoDj={handleToggleAutoDj}
           onLoadSkin={() => void handleLoadSkin()}
@@ -652,6 +824,18 @@ export function App(): React.JSX.Element {
           health={xray.health}
           deep={deep}
           onDeepScan={() => void handleDeepScan()}
+          names={xray.names}
+          namedCount={xray.namedCount}
+          onAcceptNames={() => void handleAcceptNames()}
+          onForgetNames={() => void handleForgetNames()}
+          want={want}
+          onMatchWantList={(text) => void handleMatchWantList(text)}
+          shapeCode={xray.shape === null ? null : encodeShapeCode(xray.shape)}
+          comparison={comparison?.report ?? null}
+          common={comparison?.common ?? []}
+          onCopyShapeCode={() => void handleCopyShapeCode()}
+          onCompareShape={(code) => void handleCompareShape(code)}
+          onSaveCommon={handleSaveCommon}
           working={xray.working}
           initialPosition={libraryPosition}
           narrow={narrow}

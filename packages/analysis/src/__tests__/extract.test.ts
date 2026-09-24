@@ -17,7 +17,12 @@ function mulberry32(seed: number): () => number {
 }
 
 /** A whole track: a click track at `bpm` over a chord, long enough for three windows. */
-function synthTrack(bpm: number, seconds: number, midiNotes: readonly number[]): Float32Array {
+function synthTrack(
+  bpm: number,
+  seconds: number,
+  midiNotes: readonly number[],
+  offsetSec = 0,
+): Float32Array {
   const random = mulberry32(3);
   const out = new Float32Array(Math.round(seconds * RATE));
   const period = (60 / bpm) * RATE;
@@ -30,7 +35,7 @@ function synthTrack(bpm: number, seconds: number, midiNotes: readonly number[]):
     }
   }
   for (let beat = 0; ; beat++) {
-    const start = Math.round(beat * period);
+    const start = Math.round(offsetSec * RATE + beat * period);
     if (start >= out.length) break;
     for (let i = 0; i < burst && start + i < out.length; i++) {
       out[start + i]! += 0.5 * (random() * 2 - 1) * Math.exp((-5 * i) / burst);
@@ -138,3 +143,43 @@ describe('extractFeatures', () => {
     expect(features.windows[0]?.startSec).toBe(0);
   });
 });
+
+describe('the beat grid at each end', () => {
+  it('finds the beat where it was put, at both ends of a track', () => {
+    // The whole value of this number is that it is right to a fraction of a beat.
+    // At 120 BPM a tenth of a beat is 50ms, which is an audibly early entry.
+    const bpm = 120;
+    const period = 60 / bpm;
+    const features = extractFeatures(synthTrack(bpm, 180, [57, 60, 64], 0.17), RATE);
+
+    expect(features.introBeatSec).not.toBeNull();
+    expect(phaseError(features.introBeatSec ?? 0, 0.17, period)).toBeLessThan(period / 10);
+
+    // The end grid is in the track's own timeline, not the excerpt's, so it is a
+    // large number that still lands on the grid.
+    expect(features.outroBeatSec).not.toBeNull();
+    expect(features.outroBeatSec ?? 0).toBeGreaterThan(150);
+    expect(phaseError(features.outroBeatSec ?? 0, 0.17, period)).toBeLessThan(period / 10);
+  });
+
+  it('says nothing about music with no pulse to be on the beat of', () => {
+    // A held tone and nothing else. The tempo estimator returns a number anyway —
+    // it always does — and the envelope of a steady tone has a small periodic
+    // ripple from the framing that a grid fits perfectly well. Measured: 109 BPM
+    // at a confidence of 0.08, and a grid on it scoring 0.41. The grid is not
+    // wrong; the question is, so it is not asked.
+    const held = new Float32Array(RATE * 60);
+    for (let i = 0; i < held.length; i++) {
+      held[i] = 0.3 * Math.sin((2 * Math.PI * 220 * i) / RATE);
+    }
+    const features = extractFeatures(held, RATE);
+    expect(features.introBeatSec).toBeNull();
+    expect(features.outroBeatSec).toBeNull();
+  });
+});
+
+/** How far a measured beat time is from the grid it should sit on, in seconds. */
+function phaseError(measured: number, expected: number, period: number): number {
+  const raw = Math.abs(measured - expected) % period;
+  return Math.min(raw, period - raw);
+}

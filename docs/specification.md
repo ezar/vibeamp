@@ -275,6 +275,8 @@ interface TrackAnalysis {
   tailRatio: number; // level of the last moment, over the track's own mean
   clippedRatio: number; // share of the signal in flat-topped peaks
   sideRatio: number | null; // side over mid; 0 is two identical channels
+  introBeatSec: number | null; // where a beat falls as the track begins
+  outroBeatSec: number | null; // and as it ends; see "Entering on the beat"
   windows: WindowFeatures[];
 }
 ```
@@ -319,8 +321,8 @@ one, and every blank one sits at distance zero from every other.
 
 ### Versioning
 
-`ANALYSIS_VERSION` is a constant. At start-up the library marks every track analysed
-by an older version as pending. The pipeline can improve without a rescan and
+`ANALYSIS_VERSION` is a constant, at 4. At start-up the library marks every track
+analysed by an older version as pending. The pipeline can improve without a rescan and
 without discarding tags or history; the old descriptors stay readable until better
 ones replace them, so the player keeps working throughout.
 
@@ -514,6 +516,59 @@ progress in its place, saying why. A recommender with too little to go on produc
 obviously bad queues, and the user concludes the feature does not work rather than
 that it is not ready.
 
+### Entering on the beat
+
+A cross-fade starts wherever the clock says, which puts the incoming track's first
+beat at a random point inside the outgoing track's bar. Two pulses a fraction of a
+beat apart is the one mistake everybody hears whether or not they could name it: it
+does not sound like two records, it sounds like a mistake.
+
+**This is not beat-matching.** Nothing is resampled and nothing is sped up — both
+records play at the tempo they were recorded at. The incoming track is started from
+a slightly different point in its own first second, chosen so that its next beat
+falls exactly where the outgoing track's next beat falls. At most one beat of the
+opening is skipped, only ever forward, and it is skipped while that deck is at the
+bottom of its fade, so the seek is silent. Measured in the browser: a seek on a
+playing element costs three to seven milliseconds of playback, about one percent of
+a beat at 120 BPM, and the end-to-end suite pins it.
+
+It cannot hold, and says so rather than pretending: two records at different tempos
+drift apart at a rate their difference sets, so the alignment is exact at the moment
+of entry and decays from there.
+
+**Finding the beats.** The tempo estimator answers "how often", which is all a queue
+needs; this needs "when". Given the period, one pass per candidate offset finds the
+phase that lines a grid of beats up best with the onsets. Three measurements shaped
+it, and each one changed the design:
+
+- **The envelope does not run where the audio does.** A percussive onset put at a
+  known instant comes back 0.78 of a frame _early_ — fifty milliseconds at the
+  analysis rate, a tenth of a beat — because spectral flux peaks on the rising edge
+  of a window rather than at its centre. It holds at 8, 16, 32 and 44.1 kHz, so it
+  is a property of the framing and not of the rate. A test pins it, because nothing
+  else in the suite would notice it moving.
+- **The best of thirty-two candidates always wins.** Scored against a flat
+  expectation, twelve seconds of white noise — where nothing starts anywhere —
+  reported a confident grid at 0.21. The strength is now measured against the other
+  offsets instead of against a flat envelope.
+- **One onset is enough to fake a grid.** The first note of a held chord, with
+  nothing after it, makes one offset win by a mile while thirty-nine of forty beats
+  sit on silence. So the strength also counts how many beats landed on anything.
+  Even that was not enough: a steady tone's envelope carries a small periodic ripple
+  from the framing, which a grid fits perfectly well — 109 BPM at 0.08 confidence,
+  grid strength 0.41. The grid is not wrong about the envelope; the question is, so
+  it is not asked unless the tempo estimator believed in the pulse.
+
+The grids are measured at **each end** of the track rather than extrapolated across
+it. A quarter of a BPM of error — inside the estimator's own search step — is half a
+beat after three minutes, and the last chorus is the only part a fade ever touches.
+
+**Bars are deliberately not attempted.** Knowing which of every four beats begins the
+bar is a much harder measurement than knowing where the beats are, it is wrong often
+enough on real music to matter, and being wrong about it is worse than not asking: a
+fade deliberately started half a bar out is more obviously wrong than one that
+simply does not know where the bar is.
+
 ## The interface
 
 The shell is Webamp's: three windows, docking, skins, hotkeys, the visualiser.
@@ -690,6 +745,116 @@ tempo, pairs landed between 0.08 and 0.29, straddling the threshold entirely.
 The window lists and never deletes. An instrumental, a radio edit, another take, or
 two tracks that simply share a progression can land here, and only the person who
 owns the records can tell.
+
+### Names for the files that have none
+
+A good share of any collection of any age has no tags at all: a folder of
+`track03.mp3` off a CD that never reached a tag database, a download that lost its
+tags to a conversion, a rip from before anybody cared. In a tag-driven player they
+are not missing, they are unfindable, which is worse.
+
+Two sources, and both read something somebody already wrote:
+
+**By sound.** If the same recording is also in the library _with_ tags — the album
+copy beside the compilation copy, the untagged rip beside the download — the
+fingerprint finds it and the name is borrowed. This is the case that needs the
+audio: nothing about the two files' names, sizes or dates says they hold the same
+music. It reuses the duplicate finder's measurement and threshold exactly.
+
+**By where it sits.** `Artist/Album/03 Title.mp3` is the layout of nearly every
+untagged rip, because whoever made it typed the artist and the album once, into the
+folder names. A path is only read when it yields an **artist**: a title read off a
+path is the file name with the extension gone, which the playlist already shows,
+and a lone parent folder is as likely to be `unsorted`, `Downloads` or `Music` as
+it is to be an album. Proposing one would have put the same wrong album on a few
+hundred files.
+
+Accepted names are stored in `given`, **beside** the tags and never in them, for two
+reasons that are both about being able to change your mind: a tag is what the file
+says about itself and a guess must never be mistaken for one, and a folder rescan
+re-reads the tags into that field, so anything written there would be wiped on the
+next visit. Nothing is ever written to the file on disk, and forgetting the names is
+the whole of the undo. The repository folds a given name into the fields the tags
+left empty as it reads, so the playlist, the X-ray, the want list and the auto-DJ
+all see one name per file without any of them knowing where it came from — except
+the want list, which says so.
+
+#### Why there is no acoustic lookup
+
+The obvious third source is AcoustID, and it is deliberately absent.
+
+A lookup there matches on a Chromaprint fingerprint, which has to agree with the
+reference implementation bit for bit; an implementation that is very nearly right
+returns nothing at all, silently, for every track. It also needs an application key
+and a network call, which is a qualification on the first line of the README for a
+feature that might never work.
+
+Neither `api.acoustid.org` nor `musicbrainz.org` is reachable from the environment
+this was built in, and no `fpcalc` exists there to check an implementation against,
+so not one real match could have been confirmed before shipping it. A feature that
+cannot be verified to work at all is worse than one that is absent, because the
+absent one does not look like it is trying.
+
+### A want list
+
+Export a library from any streaming service and you get a few thousand lines of
+"Artist, Title" and nothing else — no audio, no tempo, no key. It is the least
+interesting file in music and the only one that crosses between a service and a
+collection somebody owns.
+
+So the window reads one — a service CSV, an `.m3u`, or lines pasted into a box, the
+format sniffed rather than asked for — and answers the question it can answer well:
+**which of these are already here.** Tags first, then the names worked out above,
+which is how a file called `t7.mp3` is found by a list that names it.
+
+Names are folded before they are compared: accents, case, `&`, the edition a service
+prints (`- 2017 Remaster`, `(Radio Edit)`) and the featured artists one side names
+and the other does not. Apostrophes are removed rather than spaced, because whether
+a title is written `Don't`, `Don’t` or `Dont` is the single thing two taggers most
+reliably disagree about. `Live` is deliberately never folded away: a live version is
+another performance, and reporting it as owned would be a claim that is not true. A
+title with no artist beside it matches only when exactly one track answers to it;
+two is a coin toss, not a match.
+
+**What it refuses to do** is guess what the missing ones sound like. The feature was
+first sketched as "which missing entries would fill a hole in the Camelot wheel or
+the tempo range", and that sketch is not answerable: a name carries no tempo and no
+key, and a hole in the wheel is by definition a place nothing owned sits, so nothing
+measurable can be said about an unheard record. Claiming otherwise would be exactly
+the invented metadata this program exists as an alternative to.
+
+The most that can honestly be attached to a missing entry is what the library
+already knows about _other records by that artist_ — how many, at what tempo, in
+which keys — and every such line says that is where it came from. One of them is
+worth acting on: when the wheel is in pieces and that artist's tracks sit in one of
+the small ones, more of them deepens a corner the rest of the collection cannot mix
+out of.
+
+### Comparing two collections
+
+The question people actually ask each other about music is what they have in common
+and what the other has that they have never heard of. It is a question about two
+libraries, and any service that answered it would first have to be told what both
+people own.
+
+A shape code answers it in fifty-seven characters: a tempo histogram, a Camelot
+histogram, and a count. No titles, no artists, nothing that could be turned back
+into a list of what anybody owns, and no server between the two machines. Each
+distribution is stored relative to its own peak, so a library of four hundred and
+one of forty thousand compare as the shapes they are; each is normalised separately,
+or a spike on the wheel would quantise the whole tempo curve into rounding. A code
+of the wrong length or version is refused rather than decoded into two plausible
+histograms nobody would question.
+
+The report says where both collections live, where each lives alone, and how much of
+each curve is shared. It never says that either person owns anything, because **two
+collections can overlap perfectly here and share not one record** — both being full
+of 128 BPM music in 8A is a resemblance, not an agreement.
+
+What can be turned into something to play is the last part: the records _you_ have
+that sit in the ground both codes agree on, ranked by the busiest shared band and
+then put in tempo order, saveable as a playlist. Every track in it has been heard by
+this machine.
 
 ### The queue, and why
 

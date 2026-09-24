@@ -13,6 +13,8 @@
 
 import type Webamp from 'webamp';
 import type { Track as WebampTrack } from 'webamp';
+import { gridOf } from '@vibeamp/dj';
+import type { TrackGrid } from '@vibeamp/dj';
 import type { Track } from '@vibeamp/core';
 
 export interface QueuedEntry {
@@ -20,9 +22,26 @@ export interface QueuedEntry {
   file: File;
 }
 
+/** The two grids a track carries, ready for the audio engine. */
+export interface UrlGrids {
+  /** Where the beats fall as the track begins, for a fade into it. */
+  intro: TrackGrid | null;
+  /** Where they fall as it ends, for a fade out of it. */
+  outro: TrackGrid | null;
+}
+
 export class PlaylistBridge {
   private readonly trackIdByUrl = new Map<string, string>();
   private readonly urlByTrackId = new Map<string, string>();
+  /**
+   * The beat grids, kept beside the URLs.
+   *
+   * The audio engine works in URLs and knows nothing about tracks, and a fade
+   * cannot wait for a database read: it is happening now. So the two numbers it
+   * needs are recorded here, where a track and its URL meet, and looked up
+   * synchronously.
+   */
+  private readonly gridsByUrl = new Map<string, UrlGrids>();
 
   constructor(private readonly webamp: Webamp) {}
 
@@ -54,6 +73,12 @@ export class PlaylistBridge {
     this.webamp.setTracksToPlay(entries.map((entry) => this.toWebampTrack(entry)));
   }
 
+  /** The beat grids for a URL, or null for a track that has none. */
+  gridsForUrl(url: string | null): UrlGrids | null {
+    if (url === null) return null;
+    return this.gridsByUrl.get(url) ?? null;
+  }
+
   /** Our track id for a URL the shell reported, or `null` if we did not queue it. */
   trackIdForUrl(url: string | null): string | null {
     if (url === null) return null;
@@ -81,6 +106,7 @@ export class PlaylistBridge {
     for (const url of this.trackIdByUrl.keys()) URL.revokeObjectURL(url);
     this.trackIdByUrl.clear();
     this.urlByTrackId.clear();
+    this.gridsByUrl.clear();
   }
 
   private toWebampTrack({ track, file }: QueuedEntry): WebampTrack {
@@ -92,6 +118,9 @@ export class PlaylistBridge {
       this.urlByTrackId.set(track.id, url);
       this.trackIdByUrl.set(url, track.id);
     }
+    // Refreshed on every pass, not only when the URL is new: a track re-queued
+    // after its analysis finished has grids this time.
+    this.gridsByUrl.set(url, { intro: gridOf(track, false), outro: gridOf(track, true) });
 
     return {
       url,

@@ -56,6 +56,29 @@ per track.
   guessed, and a track that merely stops dead on a beat is left alone. It also says
   what it _cannot_ see: a file re-encoded from a lossy source is invisible, because
   the analysis runs at 16 kHz and an encoder's fingerprint lives above that.
+- **Names the files that have none, by ear.** Every old collection has a folder of
+  `track03.mp3` that no tag database ever reached. If the same recording is also in
+  your library _with_ tags — the album copy beside the compilation copy — the
+  fingerprint finds it and the name is borrowed, which nothing about the two files'
+  names, sizes or dates could have told you. The rest are read off the folders,
+  where whoever ripped them typed the artist once. Names are stored beside your
+  tags, never written into your files, and forgetting them is the whole of the undo.
+- **Tells you what you already own.** Paste a list — a streaming service export,
+  an `.m3u`, or "Artist – Title" one per line — and it says which of them are on
+  your shelf, matching through the spellings two taggers disagree about and through
+  the names it worked out above. It will not guess what the missing ones sound like:
+  a name carries no tempo and no key, and this program does not invent metadata.
+- **Compares your collection with a friend's, without a server.** One button copies
+  fifty-seven characters holding two histograms and a count — no titles, no artists,
+  nothing that says what you own. Paste theirs and you get where you both live,
+  where each of you lives alone, and a playlist of **your** records from the ground
+  you share.
+- **Brings the next track in on the beat.** Not beatmatching — nothing is sped up,
+  and both records play at their own tempo. The incoming track simply starts from
+  the point that puts its first beat where the outgoing track's next beat falls, and
+  it is nudged while that deck is still silent, so you never hear the seek. It says
+  how long the alignment lasts rather than pretending two different tempos stay
+  together.
 - **Shows you the queue, and why.** The next four tracks with their tempo and
   Camelot code, and one line for the move about to happen: `+6 bpm · 8B→8A
 relative · energy +12`. Where it is not sure of a key it says so instead of
@@ -87,9 +110,11 @@ relative · energy +12`. Where it is not sure of a key it says so instead of
 ## What it is not
 
 It does not stream, it has no catalogue, and it will not find you music you do not
-already own. It is not a DJ tool: there is no beatmatching and no cue points. And it
-does not diagnose your taste — every number it stores is a measurement of a
-waveform, and the ones that are proxies say so.
+already own. It is not a DJ tool: nothing is time-stretched, there is no
+beatmatching and there are no cue points — a track that enters on the beat is two
+records meeting on one beat, not two records held together. And it does not diagnose
+your taste — every number it stores is a measurement of a waveform, and the ones
+that are proxies say so.
 
 ## Getting started
 
@@ -133,6 +158,12 @@ There is no backend. Nothing is uploaded, nothing is logged, and there is nothin
 opt out of. The app asks for persistent storage so the browser does not discard
 hours of analysis under disk pressure, and for read access to the folder you choose.
 That is the whole list.
+
+The features that involve somebody else involve no network either. A want list is
+read in the page and goes nowhere. A shape code is two histograms and a count, and
+you send it yourself, to whoever you meant to send it to. There is no acoustic
+lookup against an online database, and [the specification](docs/specification.md)
+says why.
 
 ## Licence
 

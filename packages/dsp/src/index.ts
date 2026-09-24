@@ -27,6 +27,8 @@ export { onsetEnvelope, ONSET_FRAME_SIZE, ONSET_ENVELOPE_RATE } from './onset.js
 export type { OnsetEnvelope } from './onset.js';
 export { estimateTempo, MIN_BPM, MAX_BPM } from './tempo.js';
 export type { TempoEstimate } from './tempo.js';
+export { beatGrid, MIN_GRID_STRENGTH } from './beats.js';
+export type { BeatGrid } from './beats.js';
 export { chromaVector, chromaSequence, CHROMA_FRAME_SIZE } from './chroma.js';
 export { estimateKey, PITCH_CLASS_NAMES } from './key.js';
 export type { KeyEstimate, KeyScale, PitchClassName } from './key.js';

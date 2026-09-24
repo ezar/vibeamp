@@ -38,7 +38,7 @@ test('finds the defects in the files and leaves the healthy ones alone', async (
     const window_ = page.locator('.library-window');
     await expect(window_.getByText('Reading the library…')).toHaveCount(0, { timeout: 120_000 });
 
-    const condition = window_.locator('.library-section--wide');
+    const condition = window_.locator('.library-section--condition');
     await expect(condition).toBeVisible();
 
     const issue = (name: string) =>

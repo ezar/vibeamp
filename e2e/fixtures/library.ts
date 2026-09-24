@@ -11,7 +11,7 @@
  * beat. Nothing musical, but every descriptor has something true to measure.
  */
 
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -99,11 +99,28 @@ function render(bpm: number, root: number, minor: boolean): Float32Array {
 }
 
 /** Wrap samples as a 16 bit mono WAV. */
-function wav(samples: Float32Array): Buffer {
+function wav(samples: Float32Array, tags?: { artist: string; title: string }): Buffer {
   const body = Buffer.alloc(samples.length * 2);
   for (let i = 0; i < samples.length; i += 1) {
     body.writeInt16LE(Math.round(Math.max(-1, Math.min(1, samples[i] ?? 0)) * 32_767), i * 2);
   }
+
+  // A `LIST`/`INFO` chunk, which is how a WAV carries tags. Written before the
+  // audio, which is legal and is where every writer of this format puts it.
+  const info =
+    tags === undefined
+      ? Buffer.alloc(0)
+      : (() => {
+          const entries = Buffer.concat([
+            Buffer.from('INFO', 'latin1'),
+            infoChunk('INAM', tags.title),
+            infoChunk('IART', tags.artist),
+          ]);
+          const head = Buffer.alloc(8);
+          head.write('LIST', 0, 'latin1');
+          head.writeUInt32LE(entries.length, 4);
+          return Buffer.concat([head, entries]);
+        })();
 
   const header = Buffer.alloc(44);
   header.write('RIFF', 0);
@@ -119,7 +136,9 @@ function wav(samples: Float32Array): Buffer {
   header.writeUInt16LE(16, 34);
   header.write('data', 36);
   header.writeUInt32LE(body.length, 40);
-  return Buffer.concat([header, body]);
+  // The declared RIFF size counts everything after it, tags included.
+  header.writeUInt32LE(36 + info.length + body.length, 4);
+  return Buffer.concat([header.subarray(0, 36), info, header.subarray(36), body]);
 }
 
 /**
@@ -545,4 +564,77 @@ function wavAt(samples: Float32Array, rate: number): Buffer {
   header.write('data', 36);
   header.writeUInt32LE(body.length, 40);
   return Buffer.concat([header, body]);
+}
+
+/**
+ * A library whose files mostly have no names, for the naming pass and the want list.
+ *
+ * The case worth testing is the one no tag editor can reach: `unsorted/t7.wav` is a
+ * re-encode of the tagged file beside it, and nothing about the two names, sizes or
+ * dates says so. Only the fingerprint does. Beside it, `Pixies/Doolittle/03
+ * Debaser.wav` is the ordinary untagged rip, where the artist was typed once into a
+ * folder name, and `04 - 100 BPM in C.wav` is a loose file whose path says nothing —
+ * which must produce no proposal at all.
+ */
+export function writeUnnamedLibrary(): {
+  dir: string;
+  tracks: GeneratedTrack[];
+  /** The tagged file the untagged copy borrows its name from. */
+  donor: { artist: string; title: string };
+  /** The untagged copy of it. */
+  bySound: string;
+  /** The rip whose artist is only in its folder name. */
+  byFolder: { fileName: string; artist: string; title: string };
+} {
+  const dir = mkdtempSync(join(tmpdir(), 'vibeamp-names-'));
+  const seconds = 20;
+  const tracks: GeneratedTrack[] = [];
+  const donor = { artist: 'Slint', title: 'Breadcrumb Trail' };
+
+  mkdirSync(join(dir, 'Pixies', 'Doolittle'), { recursive: true });
+  mkdirSync(join(dir, 'unsorted'), { recursive: true });
+
+  // The tagged one. Its tags live in a RIFF INFO chunk, which is where a WAV
+  // carries them and which the app's tag reader reads.
+  const known = progressionTrack(120, 57, true, seconds, 21);
+  writeFileSync(join(dir, 'known-original.wav'), wav(known, donor));
+  tracks.push({ fileName: 'known-original.wav', bpm: 120, key: 'Am' });
+
+  // The same recording, re-encoded and with no tags at all.
+  writeFileSync(join(dir, 'unsorted', 't7.wav'), wav(degrade(known)));
+  tracks.push({ fileName: 't7.wav', bpm: 120, key: 'Am' });
+
+  // Different music, no tags, but the folders say who made it.
+  writeFileSync(
+    join(dir, 'Pixies', 'Doolittle', '03 Debaser.wav'),
+    wav(progressionTrack(132, 62, false, seconds, 22)),
+  );
+  tracks.push({ fileName: '03 Debaser.wav', bpm: 132, key: 'D' });
+
+  // Nothing to say about this one, and nothing must be said.
+  writeFileSync(
+    join(dir, '04 - 100 BPM in C.wav'),
+    wav(progressionTrack(100, 60, false, seconds, 23)),
+  );
+  tracks.push({ fileName: '04 - 100 BPM in C.wav', bpm: 100, key: 'C' });
+
+  return {
+    dir,
+    tracks,
+    donor,
+    bySound: 't7.wav',
+    byFolder: { fileName: '03 Debaser.wav', artist: 'Pixies', title: 'Debaser' },
+  };
+}
+
+/** One `INFO` sub-chunk: a four character id, a length, and the text with a null. */
+function infoChunk(id: string, text: string): Buffer {
+  const body = Buffer.from(`${text}\0`, 'latin1');
+  // Every RIFF chunk is padded to an even length, and a reader that trusts the
+  // declared size will land mid-chunk on the next one without it.
+  const padded = body.length % 2 === 0 ? body : Buffer.concat([body, Buffer.alloc(1)]);
+  const header = Buffer.alloc(8);
+  header.write(id, 0, 'latin1');
+  header.writeUInt32LE(body.length, 4);
+  return Buffer.concat([header, padded]);
 }

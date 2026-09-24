@@ -10,16 +10,21 @@
  * a collection ought to look some other way than it does.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { HEALTH_TRACKS_SHOWN, cutoffVerdict, describeCutoff } from '@vibeamp/core';
 import type {
+  ArtistNote,
   CutoffReading,
   CutoffVerdict,
   DuplicateGroup,
   HealthFinding,
   LibraryHealth,
   LibraryShape,
+  ProposedName,
+  ShapeComparison,
   Track,
+  WantReport,
+  WantRow,
 } from '@vibeamp/core';
 import { useDraggable } from './useDraggable.js';
 import './library.css';
@@ -42,6 +47,27 @@ export interface LibraryWindowProps {
   deep: DeepScanState | null;
   /** Start the second decode. Null when there is nothing reachable to read. */
   onDeepScan: (() => void) | null;
+  /** Names worked out for the files that have none. Null before the pass has run. */
+  names: readonly ProposedName[] | null;
+  /** How many files already carry a name this library gave them. */
+  namedCount: number;
+  /** Write every proposal into the index. Never into the files. */
+  onAcceptNames: () => void;
+  /** Drop every name this library gave itself. */
+  onForgetNames: () => void;
+  /** The last list somebody matched against the library. */
+  want: WantReport | null;
+  /** Match a pasted or opened list. */
+  onMatchWantList: (text: string) => void;
+  /** This library's own shape code, to send to somebody. */
+  shapeCode: string | null;
+  /** The last comparison against a code somebody sent. */
+  comparison: ShapeComparison | null;
+  /** Records of this library that sit in the ground the two collections share. */
+  common: readonly Track[];
+  onCopyShapeCode: () => void;
+  onCompareShape: (code: string) => void;
+  onSaveCommon: () => void;
   /** True while the two are being computed, which is a pass over the library. */
   working: boolean;
   /** Where the window opens. Ignored on a phone, where it is a block in the page. */
@@ -70,6 +96,18 @@ export function LibraryWindow({
   health,
   deep,
   onDeepScan,
+  names,
+  namedCount,
+  onAcceptNames,
+  onForgetNames,
+  want,
+  onMatchWantList,
+  shapeCode,
+  comparison,
+  common,
+  onCopyShapeCode,
+  onCompareShape,
+  onSaveCommon,
   working,
   initialPosition,
   narrow,
@@ -118,6 +156,28 @@ export function LibraryWindow({
         )}
 
         {health !== null && <Health health={health} deep={deep} onDeepScan={onDeepScan} />}
+
+        {names !== null && (
+          <Names
+            names={names}
+            namedCount={namedCount}
+            onAccept={onAcceptNames}
+            onForget={onForgetNames}
+          />
+        )}
+
+        {shape !== null && <Wanted report={want} onMatch={onMatchWantList} />}
+
+        {shapeCode !== null && (
+          <Compare
+            mine={shapeCode}
+            comparison={comparison}
+            common={common}
+            onCopyCode={onCopyShapeCode}
+            onCompare={onCompareShape}
+            onSaveCommon={onSaveCommon}
+          />
+        )}
 
         {!working && shape !== null && shape.analysed === 0 && (
           <p className="library-note">
@@ -363,7 +423,7 @@ function Health({
   onDeepScan: (() => void) | null;
 }): React.JSX.Element {
   return (
-    <section className="library-section library-section--wide">
+    <section className="library-section library-section--wide library-section--condition">
       <h3>condition</h3>
       {health.findings.length === 0 ? (
         <p className="library-note">
@@ -600,4 +660,382 @@ function sectorPath(number: number, inner: number, outer: number): string {
     `A ${inner} ${inner} 0 0 0 ${point(inner, from)}`,
     'Z',
   ].join(' ');
+}
+
+/** Proposals listed before the rest are folded away. */
+const NAMES_SHOWN = 10;
+
+/**
+ * The files that had no name, and what this library worked out to call them.
+ *
+ * The interesting half of this list is the half that came from the audio: a file
+ * called `t3.mp3` matched to a tagged copy of the same recording, which nothing
+ * about the two names, sizes or dates could have told you. The other half is read
+ * off the folders, which is where the person who ripped it typed the artist once.
+ *
+ * Accepting writes into this library's index and never into the file. That is
+ * stated here rather than left to be discovered, because a tagger that edits files
+ * is a different and much more frightening program.
+ */
+function Names({
+  names,
+  namedCount,
+  onAccept,
+  onForget,
+}: {
+  names: readonly ProposedName[];
+  namedCount: number;
+  onAccept: () => void;
+  onForget: () => void;
+}): React.JSX.Element | null {
+  const shown = names.slice(0, NAMES_SHOWN);
+  const bySound = names.filter((proposal) => proposal.source === 'sound').length;
+
+  if (names.length === 0 && namedCount === 0) return null;
+
+  return (
+    <section className="library-section library-section--wide library-section--names">
+      <h3>names</h3>
+      {names.length === 0 ? (
+        <p className="library-note">
+          Nothing left to name. {namedCount} {namedCount === 1 ? 'file carries' : 'files carry'} a
+          name this library worked out.
+        </p>
+      ) : (
+        <>
+          <p className="library-note">
+            {names.length} {names.length === 1 ? 'file has' : 'files have'} no name of their own.
+            {bySound > 0 &&
+              ` ${bySound} of them can be named from the audio: the same recording is here again, tagged.`}
+          </p>
+          <ul className="library-names">
+            {shown.map((proposal) => (
+              <li key={proposal.track.id}>
+                <span className={`library-issue library-issue--${proposal.source}`}>
+                  {proposal.source === 'sound' ? 'by sound' : 'by folder'}
+                </span>
+                <span className="library-names-was" title={proposal.track.relPath}>
+                  {proposal.track.fileName}
+                </span>
+                <span className="library-names-to" aria-hidden="true">
+                  →
+                </span>
+                <span className="library-names-now">{proposed(proposal)}</span>
+                {proposal.from !== null && (
+                  <span className="library-names-from">
+                    from {displayName(proposal.from)} · {proposal.distance?.toFixed(3)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {names.length > shown.length && (
+            <p className="library-note">and {names.length - shown.length} more.</p>
+          )}
+        </>
+      )}
+      <div className="library-want-actions">
+        <button
+          type="button"
+          className="vibe-button"
+          disabled={names.length === 0}
+          onClick={onAccept}
+          title="Store these names in this library’s index. The files on disk are not touched."
+        >
+          Accept {names.length > 0 ? `all ${names.length}` : 'all'}
+        </button>
+        <button
+          type="button"
+          className="vibe-button"
+          disabled={namedCount === 0}
+          onClick={onForget}
+          title="Drop every name this library gave itself. The tags were never changed, so this is the whole of the undo."
+        >
+          Forget {namedCount > 0 ? namedCount : ''}
+        </button>
+      </div>
+      <p className="library-legend">
+        Written into this library’s index, never into the file. A rescan re-reads the real tags and
+        leaves these alone.
+      </p>
+    </section>
+  );
+}
+
+/** A proposal, as one line. */
+function proposed(proposal: ProposedName): string {
+  const artist = proposal.artist ?? proposal.track.meta.artist;
+  const title = proposal.title ?? proposal.track.meta.title ?? '';
+  return artist === null ? title : `${artist} — ${title}`;
+}
+
+/** Rows of a matched list shown before the rest are folded away. */
+const WANT_ROWS_SHOWN = 15;
+
+/**
+ * Somebody else's list, against this shelf.
+ *
+ * The one file that crosses between a streaming service and a collection you own is
+ * a few thousand lines of "Artist, Title", so this reads one and answers the
+ * question it can answer: which of these are already here. Tags first, then the
+ * names worked out above — which is how a file with no tags at all can still be
+ * found by a list that names it.
+ *
+ * Nothing about the missing ones is guessed at. See `wantList.ts` for why a name
+ * cannot be turned into a tempo or a key, and what is offered instead.
+ */
+function Wanted({
+  report,
+  onMatch,
+}: {
+  report: WantReport | null;
+  onMatch: (text: string) => void;
+}): React.JSX.Element {
+  const [text, setText] = useState('');
+  const missing = report?.rows.filter((row) => row.track === null) ?? [];
+  const owned = report?.rows.filter((row) => row.track !== null) ?? [];
+
+  return (
+    <section className="library-section library-section--wide library-section--want">
+      <h3>want list</h3>
+      <p className="library-note">
+        Paste a list, or open one: an export from a streaming service (.csv), a playlist (.m3u), or
+        one “Artist – Title” per line. It is read here and goes nowhere.
+      </p>
+      <textarea
+        className="library-want-input"
+        rows={3}
+        value={text}
+        placeholder={'Pixies – Debaser\nSlint – Breadcrumb Trail'}
+        aria-label="Want list"
+        onChange={(event) => setText(event.target.value)}
+      />
+      <div className="library-want-actions">
+        <button
+          type="button"
+          className="vibe-button"
+          disabled={text.trim() === ''}
+          onClick={() => onMatch(text)}
+        >
+          Match
+        </button>
+        <label className="vibe-button library-want-open">
+          Open a file…
+          <input
+            type="file"
+            accept=".csv,.txt,.m3u,.m3u8,text/csv,text/plain,audio/x-mpegurl"
+            aria-label="Open a want list"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              // Cleared here so the same file can be opened twice in a row, which
+              // an input keeps its value through and would otherwise ignore.
+              event.target.value = '';
+              if (file === undefined) return;
+              void file.text().then(onMatch);
+            }}
+          />
+        </label>
+      </div>
+
+      {report !== null && (
+        <>
+          <ul className="library-findings">
+            {report.findings.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          {report.titleOnly > 0 && (
+            <p className="library-legend">
+              {report.titleOnly} of these lines name no artist. Those are matched on the title
+              alone, and only when exactly one track answers to it.
+            </p>
+          )}
+          <div className="library-want-lists">
+            <WantColumn heading={`not here · ${missing.length}`} rows={missing} />
+            <WantColumn heading={`on the shelf · ${owned.length}`} rows={owned} />
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function WantColumn({
+  heading,
+  rows,
+}: {
+  heading: string;
+  rows: readonly WantRow[];
+}): React.JSX.Element | null {
+  if (rows.length === 0) return null;
+  const shown = rows.slice(0, WANT_ROWS_SHOWN);
+
+  return (
+    <div className="library-want-column">
+      <h4>{heading}</h4>
+      <ol>
+        {shown.map((row, index) => (
+          <li key={`${row.entry.line}-${index}`}>
+            <span className="library-want-line">{row.entry.line}</span>
+            {row.via !== null && row.via !== 'tags' && (
+              <span
+                className="library-issue library-issue--sound"
+                title="Matched a name this library worked out from the audio, not from a tag"
+              >
+                {row.via === 'sound' ? 'by sound' : 'by folder'}
+              </span>
+            )}
+            {row.artistNote !== null && <ArtistLine note={row.artistNote} />}
+          </li>
+        ))}
+      </ol>
+      {rows.length > shown.length && (
+        <p className="library-note">and {rows.length - shown.length} more.</p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The only thing that can honestly be said about a record nobody here has heard:
+ * what the copies of that artist already on the shelf are like.
+ *
+ * Phrased so that it cannot be misread as a measurement of the missing track. It
+ * is a measurement of its neighbours.
+ */
+function ArtistLine({ note }: { note: ArtistNote }): React.JSX.Element {
+  const tempo = note.medianBpm === null ? '' : `, around ${note.medianBpm} BPM`;
+  const keys = note.keys.length === 0 ? '' : ` in ${note.keys.join(', ')}`;
+  return (
+    <span className="library-want-note">
+      you have {note.owned} by {note.artist}
+      {tempo}
+      {keys}
+      {note.island !== null &&
+        ` — a corner of the wheel your other ${note.island.size === 1 ? 'track' : `${note.island.size} tracks`} there cannot be mixed out of`}
+    </span>
+  );
+}
+
+/** Tracks of the shared set listed before the rest are folded away. */
+const COMMON_SHOWN = 12;
+
+/**
+ * Two collections, side by side, with nothing between them but a short code.
+ *
+ * The question people actually ask each other about music — what have we got in
+ * common, and what have you got that I have never heard — is a question about two
+ * libraries, and every service that could answer it would first have to be told
+ * what both people own. The code carries two histograms and a count: no titles, no
+ * artists, nothing that could be turned back into a list of records.
+ *
+ * What comes out is a resemblance, not an agreement: two collections can overlap
+ * perfectly here and share not one track. So the last part is the only part that
+ * can be played — the records *you* have that sit in the ground you share.
+ */
+function Compare({
+  mine,
+  comparison,
+  common,
+  onCopyCode,
+  onCompare,
+  onSaveCommon,
+}: {
+  /** Your own code, to send. */
+  mine: string;
+  comparison: ShapeComparison | null;
+  common: readonly Track[];
+  onCopyCode: () => void;
+  onCompare: (code: string) => void;
+  onSaveCommon: () => void;
+}): React.JSX.Element {
+  const [code, setCode] = useState('');
+  const shown = common.slice(0, COMMON_SHOWN);
+
+  return (
+    <section className="library-section library-section--wide library-section--compare">
+      <h3>compare</h3>
+      <p className="library-note">
+        Send somebody this code and they can see how your collections line up. It holds two
+        histograms and a count — no titles, no artists, nothing that says what you own.
+      </p>
+      <div className="library-want-actions">
+        <input className="library-code" readOnly value={mine} aria-label="Your shape code" />
+        <button type="button" className="vibe-button" onClick={onCopyCode}>
+          Copy
+        </button>
+      </div>
+      <div className="library-want-actions">
+        <input
+          className="library-code"
+          value={code}
+          placeholder="paste theirs here"
+          aria-label="Their shape code"
+          onChange={(event) => setCode(event.target.value)}
+        />
+        <button
+          type="button"
+          className="vibe-button"
+          disabled={code.trim() === ''}
+          onClick={() => onCompare(code)}
+        >
+          Compare
+        </button>
+      </div>
+
+      {comparison !== null && (
+        <>
+          <ul className="library-findings">
+            {comparison.findings.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+          <div className="library-want-lists">
+            <Overlap label="tempo" value={comparison.tempoOverlap} />
+            <Overlap label="key" value={comparison.keyOverlap} />
+          </div>
+
+          {shown.length > 0 && (
+            <div className="library-common">
+              <h4>
+                yours, from the ground you share · {common.length}
+                <button type="button" className="vibe-button" onClick={onSaveCommon}>
+                  Save .m3u
+                </button>
+              </h4>
+              <ol>
+                {shown.map((track) => (
+                  <li key={track.id} title={track.relPath}>
+                    {displayName(track)} · {Math.round(track.analysis?.bpm ?? 0)} ·{' '}
+                    {track.analysis?.key.camelot ?? '--'}
+                  </li>
+                ))}
+              </ol>
+              {common.length > shown.length && (
+                <p className="library-note">and {common.length - shown.length} more.</p>
+              )}
+            </div>
+          )}
+          {/* Said whatever the numbers were: the overlap is between two shapes,
+              and two collections can look identical here and share no records. */}
+          <p className="library-legend">
+            A resemblance between two shapes, never a claim about what either of you owns.
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** One overlap, as a bar and a number. */
+function Overlap({ label, value }: { label: string; value: number }): React.JSX.Element {
+  return (
+    <div className="library-overlap">
+      <span className="library-overlap-label">{label}</span>
+      <span className="library-overlap-bar">
+        <span style={{ width: `${Math.round(value * 100)}%` }} />
+      </span>
+      <span className="library-overlap-value">{Math.round(value * 100)}%</span>
+    </div>
+  );
 }

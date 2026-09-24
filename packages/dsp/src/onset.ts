@@ -18,11 +18,36 @@ export const ONSET_FRAME_SIZE = 1024;
  */
 export const ONSET_ENVELOPE_RATE = 100;
 
+/**
+ * How far ahead of the audio the envelope runs, in frames.
+ *
+ * Measured rather than derived. A percussive onset put at a known instant comes
+ * back from this envelope 0.78 of a frame early, and the figure holds at 8, 16, 32
+ * and 44.1 kHz — so it is a property of the framing and not of the rate. The
+ * measurement is a test, so a change to the frame size or the flux that moves it
+ * fails there rather than quietly putting every beat grid a tenth of a beat out.
+ */
+const ENVELOPE_LEAD_FRAMES = 0.78;
+
 export interface OnsetEnvelope {
   /** Onset strength per envelope frame, half-wave rectified and mean-removed. */
   strength: Float64Array;
   /** Envelope frames per second. */
   rate: number;
+  /**
+   * How far *ahead* of the audio the envelope runs, in seconds.
+   *
+   * A sound is not detected where it is. The first frame whose window reaches back
+   * far enough already contains it, and spectral flux — a difference — peaks on
+   * the rising edge of that window rather than at its centre, so the envelope's
+   * peak arrives before the sound does.
+   *
+   * Fifty milliseconds at the analysis rate: nothing at all to a tempo, which is a
+   * question about intervals, and a tenth of a beat to anything asking *when* —
+   * which is audible. Anyone reading a time off this envelope has to add it back.
+   * See `beats.ts`, and the measurement in `beats.test.ts`.
+   */
+  leadSec: number;
   /**
    * Largest strength divided by the mean strength, 1 upwards.
    *
@@ -46,7 +71,8 @@ export function onsetEnvelope(signal: Float32Array, sampleRate: number): OnsetEn
   const rate = sampleRate / hopSize;
   const spectrogram = new Spectrogram({ frameSize: ONSET_FRAME_SIZE, hopSize });
   const frames = spectrogram.frameCount(signal.length);
-  if (frames < 2) return { strength: new Float64Array(0), rate, peakiness: 1 };
+  const leadSec = (ENVELOPE_LEAD_FRAMES * ONSET_FRAME_SIZE) / sampleRate;
+  if (frames < 2) return { strength: new Float64Array(0), rate, leadSec, peakiness: 1 };
 
   const current = new Float64Array(spectrogram.binCount);
   const previous = new Float64Array(spectrogram.binCount);
@@ -64,7 +90,9 @@ export function onsetEnvelope(signal: Float32Array, sampleRate: number): OnsetEn
   // leaves a fast ripple that is not one either.
   const smoothed = movingAverage(raw, 1);
   const strength = removeLocalMean(smoothed, Math.round(rate * 0.4));
-  return { strength, rate, peakiness: peakinessOf(strength) };
+  // Both of those windows are centred, so neither moves the envelope in time and
+  // the lead is the framing's alone.
+  return { strength, rate, leadSec, peakiness: peakinessOf(strength) };
 }
 
 /** Centred moving average over `2 * radius + 1` frames. */

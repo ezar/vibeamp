@@ -14,8 +14,16 @@ import {
   recordFeatures,
   recordInputs,
   renormalise,
+  withGivenName,
 } from '@vibeamp/core';
-import type { LibraryStatistics, RawFeatures, Track, TrackStatus } from '@vibeamp/core';
+import type {
+  GivenName,
+  LibraryStatistics,
+  ProposedName,
+  RawFeatures,
+  Track,
+  TrackStatus,
+} from '@vibeamp/core';
 import { SETTING_KEYS, readStatistics, writeSetting } from './db.js';
 import type { PlayEvent, VibeampDatabase } from './db.js';
 
@@ -190,17 +198,23 @@ export class LibraryRepository {
     return statistics;
   }
 
-  /** Every track in the library, whatever its status. */
+  /**
+   * Every track in the library, whatever its status.
+   *
+   * Given names are folded in here, at the boundary, rather than in each of the
+   * dozen places a track is displayed or measured. See `withGivenName`.
+   */
   async allTracks(): Promise<Track[]> {
-    return this.db.tracks.toArray();
+    return (await this.db.tracks.toArray()).map(withGivenName);
   }
 
   async allAnalysed(): Promise<Track[]> {
-    return this.db.tracks.where('status').equals('done').toArray();
+    return (await this.db.tracks.where('status').equals('done').toArray()).map(withGivenName);
   }
 
   async get(id: string): Promise<Track | undefined> {
-    return this.db.tracks.get(id);
+    const track = await this.db.tracks.get(id);
+    return track === undefined ? undefined : withGivenName(track);
   }
 
   /**
@@ -213,7 +227,53 @@ export class LibraryRepository {
    */
   async getMany(ids: readonly string[]): Promise<Track[]> {
     const found = await this.db.tracks.bulkGet([...ids]);
-    return found.filter((track): track is Track => track !== undefined);
+    return found.filter((track): track is Track => track !== undefined).map(withGivenName);
+  }
+
+  // ---- names for the files that have none ----
+
+  /**
+   * Accept names for the files that had none.
+   *
+   * Written to `given`, never to `meta`: a tag is what the file says about itself,
+   * and a folder rescan re-reads the tags into that field — anything written there
+   * would be wiped on the next visit. Nothing is written to the file on disk.
+   *
+   * @returns How many records were changed.
+   */
+  async applyNames(proposals: readonly ProposedName[]): Promise<number> {
+    if (proposals.length === 0) return 0;
+    const at = Date.now();
+
+    let changed = 0;
+    await this.db.transaction('rw', this.db.tracks, async () => {
+      for (const proposal of proposals) {
+        const given: GivenName = {
+          artist: proposal.artist,
+          title: proposal.title,
+          album: proposal.album,
+          trackNo: proposal.trackNo,
+          source: proposal.source,
+          at,
+        };
+        changed += await this.db.tracks.update(proposal.track.id, { given });
+      }
+    });
+    return changed;
+  }
+
+  /**
+   * Drop every name this library gave itself.
+   *
+   * The whole of the undo. The tags were never touched, so forgetting the guesses
+   * puts the library back exactly where it was.
+   */
+  async forgetNames(): Promise<number> {
+    const named = await this.db.tracks.filter((track) => (track.given ?? null) !== null).toArray();
+    await this.db.transaction('rw', this.db.tracks, async () => {
+      for (const track of named) await this.db.tracks.update(track.id, { given: null });
+    });
+    return named.length;
   }
 
   // ---- play history ----
