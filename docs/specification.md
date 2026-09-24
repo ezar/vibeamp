@@ -277,6 +277,8 @@ interface TrackAnalysis {
   sideRatio: number | null; // side over mid; 0 is two identical channels
   introBeatSec: number | null; // where a beat falls as the track begins
   outroBeatSec: number | null; // and as it ends; see "Entering on the beat"
+  soundStartSec: number | null; // where the music starts, past any dead air
+  soundEndSec: number | null; // and where it stops
   windows: WindowFeatures[];
 }
 ```
@@ -321,7 +323,7 @@ one, and every blank one sits at distance zero from every other.
 
 ### Versioning
 
-`ANALYSIS_VERSION` is a constant, at 4. At start-up the library marks every track
+`ANALYSIS_VERSION` is a constant, at 5. At start-up the library marks every track
 analysed by an older version as pending. The pipeline can improve without a rescan and
 without discarding tags or history; the old descriptors stay readable until better
 ones replace them, so the player keeps working throughout.
@@ -515,6 +517,98 @@ Below 30 analysed tracks the auto-DJ is disabled and the interface shows analysi
 progress in its place, saying why. A recommender with too little to go on produces
 obviously bad queues, and the user concludes the feature does not work rather than
 that it is not ready.
+
+### One volume for the whole collection
+
+The most boring problem in a music library and the one that interrupts listening
+most often: a CD mastered in 1985 and a reissue from 2015 are ten decibels apart.
+ReplayGain solves it, for the files somebody already tagged — which in a real
+collection is a fraction of them. This library measured the level of every track
+itself, so nothing new is analysed: `loudnessDb` and the crest factor are already
+stored and the whole feature is arithmetic over them.
+
+**The reference is the library's own median**, not a fixed level. It is the
+argument the percentiles are built on, and it has a practical edge: half the library
+moves up and half moves down, so the collection keeps the volume it had. An error in
+the reference is common-mode, shifting every track equally, which is why a median
+read off the hundred-bucket histogram already in storage is precise enough; what has
+to be precise is each track's own correction, and that comes from its own measured
+level.
+
+**A boost is capped by the headroom actually measured.** The crest factor puts a
+peak on the track, and the trim stops two decibels short of full scale — with that
+margin because the crest factor comes from the analysed windows and the loudest
+moment of a file may not be in one. A brickwalled master is therefore never raised
+at all. Nothing moves more than twelve decibels either way: past that a recording is
+not badly mastered, it is a different kind of thing, and dragging a field recording
+to the middle of a record collection is levelling in the pejorative sense.
+
+The correction is a gain node of its own between the element and the fade gain, not
+a factor folded into it — the fade ramps that gain from zero to one and back, and
+anything multiplied in would be undone by the next ramp.
+
+### Where a track starts and stops
+
+A file's length and a recording's length are not the same thing, and every
+collection is full of the difference: a rip that kept four seconds of lead-in, a
+download padded by its encoder, an album track with the run-out left on. A player
+that treats the file's ends as the music's ends puts a hole in the middle of a set
+every time one of those comes up — which is what a cross-fade exists to avoid.
+
+Three things use the measurement. The fade aims at the end of the music rather than
+the end of the file. A deck loading a track with silence at its head skips it,
+before the beat alignment runs, so the alignment starts from where the music begins.
+And the condition report names the padded files, in case the rip is worth fixing
+rather than working around forever.
+
+What it measures is **dead air and nothing else**. The floor is forty decibels below
+the track's own mean level, which makes it mean the same thing for a hushed
+recording as for a brickwalled one and sits far below anything music does: a quiet
+intro is never cut, and a fade-out is not trimmed, because a fade is the end of the
+music and cutting it would be editing somebody's record. Sound must persist for a
+fifth of a second before it counts as the start, so a tape pop in the lead-in is not
+the beginning — and "persist" means most of that window rather than all of it,
+because a rest between two notes is not the end of a track. Each of those refusals
+has a test, since they are the half of this that can do damage.
+
+The condition check has a gate of its own rather than a bump of the shared one: the
+tail, the clipping and the side ratio are all still readable on a track analysed by
+version 3, and hiding six working checks behind a seventh would make the report
+worse for everybody until a whole library had been read again.
+
+### From one record to another
+
+The auto-DJ answers "what next", which is the question a radio asks. The journey
+answers the one a DJ asks: how do I get from here to there. Name the two ends and
+the records in between are laid out, each step a move the planner would already have
+been willing to make, with the reason printed beside it. Only a collection somebody
+has listened to can answer it — a service knows what its catalogue is filed under,
+but nothing it stores about a track is a distance to another one.
+
+A beam search rather than a greedy walk: greedy gets a long way and then finds
+nothing left within reach, and keeping a handful of partial routes alive costs
+almost nothing. Routes are pruned to one per last track, or the beam fills with
+eight variations on the same tail.
+
+Two measurements changed the design, and one assertion caught both. On a library
+spread evenly from 70 to 170 BPM, asked for six steps, where an even step is 0.14 of
+the energy range:
+
+| what was wrong                               | what the route did        |
+| -------------------------------------------- | ------------------------- |
+| tempo cost treats double time as a match     | leapt at step three, 0.73 |
+| destination pull at 0.9, level with the rest | dawdled, then leapt, 0.61 |
+
+The first is the queue's own `bpmCost`, which is right for a queue — what matters
+there is that the pulse carries over — and exactly wrong here, because a free octave
+is a free jump. The journey measures tempo without the octave allowance, against a
+budget derived from how far it has to travel in how many moves. The second is a
+weighting: at 2.5 the pull decides _where_ each step should be and the transition
+cost decides _which_ of the tracks near there to use. Note the pull is towards the
+interpolated point for that step and never towards the destination itself, so a
+strong pull means "be where the journey says you should be", not "arrive early".
+After both fixes every step lands within 0.153 of an even one at six steps, and
+0.102 at ten.
 
 ### Entering on the beat
 

@@ -300,7 +300,7 @@ export function writeUnhealthyLibrary(): {
   dir: string;
   tracks: GeneratedTrack[];
   /** File names by the defect each one carries. */
-  defects: Record<'fakeStereo' | 'truncated' | 'clipped' | 'silent', string>;
+  defects: Record<'fakeStereo' | 'truncated' | 'clipped' | 'silent' | 'padded', string>;
 } {
   const dir = mkdtempSync(join(tmpdir(), 'vibeamp-health-'));
   const seconds = 40;
@@ -351,6 +351,20 @@ export function writeUnhealthyLibrary(): {
     132,
   );
 
+  // Padded: a rip that kept five seconds of lead-in and four of run-out. Nothing
+  // is wrong with the recording; the file is simply longer than it is.
+  //
+  // Both channels are padded after they are widened, not widened after they are
+  // padded. `widen` adds noise across whatever it is given, and noise fifteen
+  // decibels under the music is not silence — the detector is right to refuse it,
+  // and a fixture built the other way round measures nothing.
+  const music = faded(body(126, 8));
+  const padded = new Float32Array(RATE * (seconds + 9));
+  const paddedRight = new Float32Array(padded.length);
+  padded.set(music, RATE * 5);
+  paddedRight.set(widen(music, 15), RATE * 5);
+  add('kept-the-lead-in.wav', stereoWav(padded, paddedRight), 126);
+
   const silent = new Float32Array(RATE * seconds);
   let state = 4242;
   for (let i = 0; i < silent.length; i += 1) {
@@ -366,6 +380,7 @@ export function writeUnhealthyLibrary(): {
       fakeStereo: 'fake-stereo.wav',
       truncated: 'truncated-download.wav',
       clipped: 'clipped-master.wav',
+      padded: 'kept-the-lead-in.wav',
       silent: 'failed-rip.wav',
     },
   };

@@ -30,5 +30,7 @@ export type { Vibe } from './vibeLink.js';
 export type { VibePreset } from './presets.js';
 export { alignIncoming, gridOf } from './align.js';
 export type { BeatAlignment, TrackGrid } from './align.js';
+export { planJourney, DEFAULT_JOURNEY_STEPS } from './journey.js';
+export type { JourneyStep, JourneyOptions } from './journey.js';
 export { setSheet } from './setSheet.js';
 export type { SetSheetRow } from './setSheet.js';

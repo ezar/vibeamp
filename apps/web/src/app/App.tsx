@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { VibePanel } from '../ui/VibePanel.jsx';
 import { LibraryWindow } from '../ui/LibraryWindow.jsx';
-import type { DeepScanState } from '../ui/LibraryWindow.jsx';
+import type { CatalogueEntry, DeepScanState } from '../ui/LibraryWindow.jsx';
 import { deepScan } from '../analysis/deepScan.js';
 import { useAppStore } from '../state/store.js';
 import { createServices } from './services.js';
@@ -43,6 +43,7 @@ import {
   promptForExport,
 } from '../library/exchange.js';
 import {
+  referenceLoudnessDb,
   commonGround,
   compareShapes,
   decodeShapeCode,
@@ -63,7 +64,8 @@ import type {
   Track,
   WantReport,
 } from '@vibeamp/core';
-import type { VibePreset } from '@vibeamp/dj';
+import { planJourney } from '@vibeamp/dj';
+import type { JourneyStep, VibePreset } from '@vibeamp/dj';
 import { vibeFromUrl, vibeLink } from './vibeLink.js';
 import { defaultWorkerCount } from '../analysis/pool.js';
 import './app.css';
@@ -103,8 +105,14 @@ export function App(): React.JSX.Element {
     health: LibraryHealth | null;
     names: readonly ProposedName[] | null;
     namedCount: number;
+    /** Every analysed track by name, for the journey pickers. */
+    catalogue: readonly CatalogueEntry[];
     working: boolean;
   } | null>(null);
+  // The last route planned, and whether one is being planned now. Kept beside the
+  // X-ray rather than inside it so a re-measure does not throw it away.
+  const [journey, setJourney] = useState<readonly JourneyStep[] | null>(null);
+  const [journeyPlanning, setJourneyPlanning] = useState(false);
   // The last list somebody matched. Kept beside the X-ray rather than inside it
   // because it survives a re-measure: nobody wants to paste the list again.
   const [want, setWant] = useState<WantReport | null>(null);
@@ -211,9 +219,12 @@ export function App(): React.JSX.Element {
       runtime.current = { services, host, bridge, queue, runner: null, skins, crossfade };
       host.media.setCrossfadeSeconds(useAppStore.getState().crossfadeSec);
       host.media.setBeatAlign(useAppStore.getState().beatAlign);
+      host.media.setLevelling(useAppStore.getState().levelling);
       // The engine works in URLs and knows nothing about tracks; the bridge is
-      // where a track and its URL meet, so that is where the grids live.
-      host.media.setGridLookup((url) => bridge.gridsForUrl(url));
+      // where a track and its URL meet, so that is where the grids and the levels
+      // live.
+      host.media.setPlaybackLookup((url) => bridge.playbackForUrl(url));
+      bridge.setLoudnessReference(referenceLoudnessDb(await services.repository.statistics()));
 
       const counts = await services.repository.counts();
       useAppStore.getState().setAnalysedCount(counts.done);
@@ -344,6 +355,14 @@ export function App(): React.JSX.Element {
     });
     current.runner = runner;
     await runner.run();
+
+    // The library now sits somewhere different, so the level everything is played
+    // at moves with it. Read once at the end of a run rather than on every track:
+    // the reference is a common-mode shift, and moving it mid-run would change the
+    // volume of what is playing for no audible benefit.
+    current.bridge.setLoudnessReference(
+      referenceLoudnessDb(await current.services.repository.statistics()),
+    );
   }, []);
 
   const handleToggleAutoDj = useCallback((enabled: boolean) => {
@@ -492,6 +511,7 @@ export function App(): React.JSX.Element {
       health: null,
       names: null,
       namedCount: 0,
+      catalogue: [],
       working: true,
     });
     const tracks = await current.services.repository.allTracks();
@@ -503,6 +523,7 @@ export function App(): React.JSX.Element {
       health: libraryHealth(tracks),
       names: proposeNames(tracks),
       namedCount: tracks.filter((track) => (track.given ?? null) !== null).length,
+      catalogue: catalogueOf(tracks),
       working: false,
     });
   }, []);
@@ -605,6 +626,91 @@ export function App(): React.JSX.Element {
     },
     [xray?.shape],
   );
+
+  /**
+   * Lay out a route from one record to another.
+   *
+   * Read and planned on demand rather than kept in step with the library: it is a
+   * pass over every analysed track, and nobody is looking at a route they have not
+   * asked for.
+   */
+  const handlePlanJourney = useCallback(async (fromId: string, toId: string, steps: number) => {
+    const current = runtime.current;
+    if (current === null) return;
+
+    setJourneyPlanning(true);
+    try {
+      const tracks = await current.services.repository.allAnalysed();
+      const from = tracks.find((track) => track.id === fromId);
+      const to = tracks.find((track) => track.id === toId);
+      if (from === undefined || to === undefined) {
+        setJourney([]);
+        return;
+      }
+      // An empty route rather than null: the window distinguishes "no route found"
+      // from "none asked for", and the two read very differently.
+      setJourney(planJourney(from, to, tracks, { steps }) ?? []);
+    } finally {
+      setJourneyPlanning(false);
+    }
+  }, []);
+
+  /**
+   * Hand the route to the shell and play it.
+   *
+   * Replacing the playlist is the only way Webamp offers to put a specific set of
+   * tracks in a specific order, so this is deliberately a button somebody presses
+   * rather than anything that happens on its own.
+   */
+  const handlePlayJourney = useCallback(() => {
+    const current = runtime.current;
+    const route = journey ?? [];
+    if (current === null || route.length === 0) return;
+
+    const entries: { track: Track; file: File }[] = [];
+    for (const step of route) {
+      const file = current.services.files.resolve(step.track);
+      if (file !== null) entries.push({ track: step.track, file });
+    }
+    if (entries.length < route.length) {
+      // Half a journey is not a journey, and playing it silently would look like
+      // the planner had changed its mind.
+      setLibraryNotice('Connect the folder first: some of these files are not open this session.');
+      return;
+    }
+
+    current.bridge.replaceAll(entries);
+    setLibraryNotice(`Playing a route of ${entries.length} tracks.`);
+  }, [journey]);
+
+  /** Save the route as one file that both plays and reads, like the set sheet. */
+  const handleSaveJourney = useCallback(() => {
+    const route = journey ?? [];
+    if (route.length === 0) return;
+
+    const first = route[0]?.track;
+    const last = route.at(-1)?.track;
+    const ends =
+      first === undefined || last === undefined ? null : `${fullTitle(first)} → ${fullTitle(last)}`;
+
+    const text = buildM3u(
+      route.map((step) => ({
+        path: step.track.relPath,
+        durationSec: step.track.durationSec,
+        title: fullTitle(step.track),
+        note: step.transition === null ? null : `↓ ${step.transition.summary}`,
+      })),
+      {
+        header: [
+          `vibeamp journey · ${route.length} tracks`,
+          ...(ends === null ? [] : [ends]),
+          'Plays as a playlist. The arrows are the moves between tracks.',
+        ],
+      },
+    );
+    downloadBlob(new Blob([text], { type: 'audio/x-mpegurl' }), 'vibeamp-journey.m3u');
+    setLibraryNotice(`Saved a route of ${route.length} tracks.`);
+  }, [journey]);
 
   /** Save the shared set as a playlist that plays anywhere. */
   const handleSaveCommon = useCallback(() => {
@@ -727,6 +833,11 @@ export function App(): React.JSX.Element {
     runtime.current?.host.media.setBeatAlign(enabled);
   }, []);
 
+  const handleLevellingChange = useCallback((enabled: boolean) => {
+    useAppStore.getState().setLevelling(enabled);
+    runtime.current?.host.media.setLevelling(enabled);
+  }, []);
+
   /** Load a `.wsz` the user brings. The app ships none of its own. */
   const handleLoadSkin = useCallback(async () => {
     const current = runtime.current;
@@ -800,6 +911,8 @@ export function App(): React.JSX.Element {
           onCrossfadeChange={handleCrossfadeChange}
           beatAlign={store.beatAlign}
           onBeatAlignChange={handleBeatAlignChange}
+          levelling={store.levelling}
+          onLevellingChange={handleLevellingChange}
           onShapeChange={store.setEnergyShape}
           onToggleAutoDj={handleToggleAutoDj}
           onLoadSkin={() => void handleLoadSkin()}
@@ -836,6 +949,13 @@ export function App(): React.JSX.Element {
           onCopyShapeCode={() => void handleCopyShapeCode()}
           onCompareShape={(code) => void handleCompareShape(code)}
           onSaveCommon={handleSaveCommon}
+          catalogue={xray.catalogue}
+          nowPlayingId={playingTrack?.id ?? null}
+          journey={journey}
+          journeyPlanning={journeyPlanning}
+          onPlanJourney={(fromId, toId, steps) => void handlePlanJourney(fromId, toId, steps)}
+          onPlayJourney={handlePlayJourney}
+          onSaveJourney={handleSaveJourney}
           working={xray.working}
           initialPosition={libraryPosition}
           narrow={narrow}
@@ -889,6 +1009,26 @@ function rightOfTheShell(): { x: number; y: number } {
     main === null ? null : main.getBoundingClientRect(),
     window.innerWidth,
   );
+}
+
+/**
+ * Every analysed track as a name somebody can type, for the journey pickers.
+ *
+ * Duplicated names are made distinct by the file they came from. Two tracks the
+ * pickers cannot tell apart would resolve to whichever came first in the table,
+ * which is a journey starting somewhere the listener did not ask for.
+ */
+function catalogueOf(tracks: readonly Track[]): CatalogueEntry[] {
+  const seen = new Map<string, number>();
+  return tracks
+    .filter((track) => track.analysis !== null)
+    .map((track) => {
+      const base = fullTitle(track);
+      const times = (seen.get(base) ?? 0) + 1;
+      seen.set(base, times);
+      return { id: track.id, label: times === 1 ? base : `${base} (${track.fileName})` };
+    })
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /** Artist and title where there is one, for a line somebody will read. */

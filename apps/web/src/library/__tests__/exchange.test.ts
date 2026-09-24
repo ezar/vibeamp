@@ -57,6 +57,8 @@ function features(overrides: Partial<RawFeatures> = {}): RawFeatures {
     sideRatio: 0.4,
     introBeatSec: 0.12,
     outroBeatSec: 180.4,
+    soundStartSec: 0,
+    soundEndSec: 180,
     windows: [{ startSec: 10, rms: 0.2, centroidHz: 2200, flux: 12, zcr: 0.08, lowBandRatio: 0.3 }],
     ...overrides,
   };

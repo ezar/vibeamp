@@ -30,6 +30,16 @@ import type { Track } from './types.js';
  */
 const HEALTH_SINCE_VERSION = 3;
 
+/**
+ * The analysis version that first measured where the music starts and stops.
+ *
+ * Its own gate rather than a bump of the one above: the tail, the clipping and the
+ * side ratio are all still readable on a track analysed by version 3, and hiding
+ * six working checks behind a seventh would make the report worse for everybody
+ * until a whole library had been read again.
+ */
+const DEAD_AIR_SINCE_VERSION = 5;
+
 export type HealthIssue =
   /** The browser could not decode it at all. */
   | 'undecodable'
@@ -42,7 +52,9 @@ export type HealthIssue =
   /** Ends at full level. Cut short, or a track that stops dead. */
   | 'abrupt-end'
   /** Peaks flattened against the ceiling. */
-  | 'clipped';
+  | 'clipped'
+  /** Seconds of silence before the music starts or after it stops. */
+  | 'dead-air';
 
 export interface HealthFinding {
   issue: HealthIssue;
@@ -112,6 +124,15 @@ const ABRUPT_TAIL = 0.5;
  * first and well below the second.
  */
 const CLIPPED_SHARE = 0.001;
+
+/**
+ * Silence at either end, in seconds, above which it is worth mentioning.
+ *
+ * Two. A second of run-out is how a record ends; two is somebody's rip keeping the
+ * lead-in, or an encoder's padding, and it is the point at which a player that
+ * trusted the file's length would put an audible hole in a set.
+ */
+const DEAD_AIR_SEC = 2;
 
 /** How many files a finding names before the rest are counted rather than listed. */
 export const HEALTH_TRACKS_SHOWN = 8;
@@ -188,6 +209,17 @@ export function libraryHealth(tracks: readonly Track[]): LibraryHealth {
       .sort((a, b) => (b.analysis?.clippedRatio ?? 0) - (a.analysis?.clippedRatio ?? 0)),
   );
 
+  // Its own gate: these two fields arrived later than the rest, and a track
+  // carrying version 3 descriptors has neither.
+  add(
+    'dead-air',
+    'Seconds of silence before the music starts or after it stops. Played as-is it is a hole in the middle of a set; here it is simply skipped.',
+    [...measurable]
+      .filter((track) => track.analysisVersion >= DEAD_AIR_SINCE_VERSION)
+      .filter((track) => deadAirSec(track) > DEAD_AIR_SEC)
+      .sort((a, b) => deadAirSec(b) - deadAirSec(a)),
+  );
+
   return {
     total: tracks.length,
     checked: analysed.length,
@@ -196,6 +228,24 @@ export function libraryHealth(tracks: readonly Track[]): LibraryHealth {
     findings,
     blindSpots: blindSpots(analysed),
   };
+}
+
+/**
+ * Silence at the two ends of a file, added together, in seconds.
+ *
+ * Zero for a track nothing was measured on, and for one with no length recorded:
+ * without a duration the silence after the music cannot be known, and guessing it
+ * would put files on this list that have nothing wrong with them.
+ */
+function deadAirSec(track: Track): number {
+  const analysis = track.analysis;
+  if (analysis === null || analysis.soundStartSec === null || analysis.soundEndSec === null) {
+    return 0;
+  }
+  const duration = track.durationSec;
+  const head = Math.max(0, analysis.soundStartSec);
+  const tail = duration === null ? 0 : Math.max(0, duration - analysis.soundEndSec);
+  return head + tail;
 }
 
 /**

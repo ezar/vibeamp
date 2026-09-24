@@ -127,6 +127,36 @@ export function percentileOf(histogram: Histogram, value: number): number {
   return clamp01(rank / histogram.total);
 }
 
+/**
+ * The value at a given position in the distribution: the inverse of
+ * {@link percentileOf}.
+ *
+ * Interpolated within the bucket the position lands in, for the same reason the
+ * forward direction is: a library whose values all fall in two or three buckets
+ * would otherwise answer with two or three distinct values.
+ *
+ * @param position 0..1. 0.5 is the median.
+ * @returns Null for an empty histogram, where there is no distribution to ask.
+ */
+export function valueAtPercentile(histogram: Histogram, position: number): number | null {
+  if (histogram.total === 0 || !Number.isFinite(position)) return null;
+
+  const wanted = clamp01(position) * histogram.total;
+  const bucketWidth = (histogram.max - histogram.min) / BUCKET_COUNT;
+
+  let below = 0;
+  for (let bucket = 0; bucket < BUCKET_COUNT; bucket += 1) {
+    const inBucket = histogram.counts[bucket] ?? 0;
+    if (below + inBucket >= wanted && inBucket > 0) {
+      const within = (wanted - below) / inBucket;
+      return histogram.min + (bucket + clamp01(within)) * bucketWidth;
+    }
+    below += inBucket;
+  }
+  // Only reachable at exactly the top of the distribution.
+  return histogram.max;
+}
+
 /** Linear position of a value in a fixed range, 0..1. */
 function linearIn(range: { min: number; max: number }, value: number): number {
   return clamp01((value - range.min) / (range.max - range.min));
@@ -204,6 +234,8 @@ export function normaliseFeatures(raw: RawFeatures, statistics: LibraryStatistic
     sideRatio: raw.sideRatio,
     introBeatSec: raw.introBeatSec,
     outroBeatSec: raw.outroBeatSec,
+    soundStartSec: raw.soundStartSec,
+    soundEndSec: raw.soundEndSec,
     windows: raw.windows,
   };
 }

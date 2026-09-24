@@ -15,6 +15,7 @@ import type Webamp from 'webamp';
 import type { Track as WebampTrack } from 'webamp';
 import { gridOf } from '@vibeamp/dj';
 import type { TrackGrid } from '@vibeamp/dj';
+import { trimDb } from '@vibeamp/core';
 import type { Track } from '@vibeamp/core';
 
 export interface QueuedEntry {
@@ -22,26 +23,37 @@ export interface QueuedEntry {
   file: File;
 }
 
-/** The two grids a track carries, ready for the audio engine. */
-export interface UrlGrids {
+/** Everything the audio engine needs to know about what is at a URL. */
+export interface UrlPlayback {
   /** Where the beats fall as the track begins, for a fade into it. */
   intro: TrackGrid | null;
   /** Where they fall as it ends, for a fade out of it. */
   outro: TrackGrid | null;
+  /** How much to move this track's level, in decibels. See `levelling.ts`. */
+  trimDb: number;
+  /** When the music starts, in seconds, or null when nothing was measured. */
+  soundStartSec: number | null;
+  /** When it stops, in seconds from the start of the file. */
+  soundEndSec: number | null;
 }
 
 export class PlaylistBridge {
   private readonly trackIdByUrl = new Map<string, string>();
   private readonly urlByTrackId = new Map<string, string>();
   /**
-   * The beat grids, kept beside the URLs.
+   * What each URL needs at playback time, kept beside the URLs.
    *
-   * The audio engine works in URLs and knows nothing about tracks, and a fade
-   * cannot wait for a database read: it is happening now. So the two numbers it
-   * needs are recorded here, where a track and its URL meet, and looked up
-   * synchronously.
+   * The audio engine works in URLs and knows nothing about tracks, and neither a
+   * fade nor a level can wait for a database read: both are happening now. So the
+   * few numbers it needs are recorded here, where a track and its URL meet, and
+   * looked up synchronously.
    */
-  private readonly gridsByUrl = new Map<string, UrlGrids>();
+  private readonly playbackByUrl = new Map<string, UrlPlayback>();
+  /**
+   * The level the library is levelled to, in dBFS, or null while it is too small
+   * to have a middle. Set by the app; see `levelling.ts`.
+   */
+  private loudnessReferenceDb: number | null = null;
 
   constructor(private readonly webamp: Webamp) {}
 
@@ -73,10 +85,22 @@ export class PlaylistBridge {
     this.webamp.setTracksToPlay(entries.map((entry) => this.toWebampTrack(entry)));
   }
 
-  /** The beat grids for a URL, or null for a track that has none. */
-  gridsForUrl(url: string | null): UrlGrids | null {
+  /** What to do with the track at a URL when it plays. */
+  playbackForUrl(url: string | null): UrlPlayback | null {
     if (url === null) return null;
-    return this.gridsByUrl.get(url) ?? null;
+    return this.playbackByUrl.get(url) ?? null;
+  }
+
+  /**
+   * Set the level the library is levelled to.
+   *
+   * Recorded rather than applied: the trims are computed as tracks are queued, so
+   * a reference that arrives after a track was queued reaches it the next time it
+   * is. That is the right trade — re-deriving the whole playlist to move one file
+   * by half a decibel is not worth a pass over it.
+   */
+  setLoudnessReference(referenceDb: number | null): void {
+    this.loudnessReferenceDb = referenceDb;
   }
 
   /** Our track id for a URL the shell reported, or `null` if we did not queue it. */
@@ -106,7 +130,7 @@ export class PlaylistBridge {
     for (const url of this.trackIdByUrl.keys()) URL.revokeObjectURL(url);
     this.trackIdByUrl.clear();
     this.urlByTrackId.clear();
-    this.gridsByUrl.clear();
+    this.playbackByUrl.clear();
   }
 
   private toWebampTrack({ track, file }: QueuedEntry): WebampTrack {
@@ -119,8 +143,14 @@ export class PlaylistBridge {
       this.trackIdByUrl.set(url, track.id);
     }
     // Refreshed on every pass, not only when the URL is new: a track re-queued
-    // after its analysis finished has grids this time.
-    this.gridsByUrl.set(url, { intro: gridOf(track, false), outro: gridOf(track, true) });
+    // after its analysis finished has grids and a level this time.
+    this.playbackByUrl.set(url, {
+      intro: gridOf(track, false),
+      outro: gridOf(track, true),
+      trimDb: trimDb(track, this.loudnessReferenceDb),
+      soundStartSec: track.analysis?.soundStartSec ?? null,
+      soundEndSec: track.analysis?.soundEndSec ?? null,
+    });
 
     return {
       url,

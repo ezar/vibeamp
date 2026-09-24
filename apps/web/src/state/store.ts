@@ -40,6 +40,14 @@ export interface AppState {
    * records and a mistake when it does. See `align.ts`.
    */
   beatAlign: boolean;
+  /**
+   * Whether every track plays at the level the rest of the library sits at.
+   *
+   * On by default. It is ReplayGain without the tags — the level was measured when
+   * the file was analysed — and it costs nothing on a library too small to have a
+   * middle, where nothing is moved at all. See `levelling.ts`.
+   */
+  levelling: boolean;
   /** Shown when the browser has no File System Access API. */
   needsReselect: boolean;
   error: string | null;
@@ -54,6 +62,7 @@ export interface AppState {
   setEnergyShape: (shape: EnergyShape) => void;
   setCrossfade: (seconds: number) => void;
   setBeatAlign: (enabled: boolean) => void;
+  setLevelling: (enabled: boolean) => void;
   setNeedsReselect: (needed: boolean) => void;
   setError: (message: string | null) => void;
 }
@@ -78,6 +87,7 @@ export const useAppStore = create<AppState>((set) => ({
   energyShape: opened?.shape ?? 'arc',
   crossfadeSec: 4,
   beatAlign: true,
+  levelling: true,
   needsReselect: false,
   error: null,
 
@@ -91,6 +101,7 @@ export const useAppStore = create<AppState>((set) => ({
   setEnergyShape: (energyShape) => set({ energyShape }),
   setCrossfade: (crossfadeSec) => set({ crossfadeSec }),
   setBeatAlign: (beatAlign) => set({ beatAlign }),
+  setLevelling: (levelling) => set({ levelling }),
   setNeedsReselect: (needsReselect) => set({ needsReselect }),
   setError: (error) => set({ error }),
 }));

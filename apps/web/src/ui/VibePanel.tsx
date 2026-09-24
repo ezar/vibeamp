@@ -75,6 +75,9 @@ export interface VibePanelProps {
   /** Whether the next track enters on a beat of the one going out. */
   beatAlign: boolean;
   onBeatAlignChange: (enabled: boolean) => void;
+  /** Whether every track plays at the library's own level. */
+  levelling: boolean;
+  onLevellingChange: (enabled: boolean) => void;
   onShapeChange: (shape: EnergyShape) => void;
   onToggleAutoDj: (enabled: boolean) => void;
   /** Load a `.wsz` the user brings. The app ships no skins of its own. */
@@ -127,6 +130,8 @@ export function VibePanel({
   onCrossfadeChange,
   beatAlign,
   onBeatAlignChange,
+  levelling,
+  onLevellingChange,
   onShapeChange,
   onToggleAutoDj,
   onLoadSkin,
@@ -297,6 +302,15 @@ export function VibePanel({
               </option>
             ))}
           </select>
+
+          <button
+            type="button"
+            className={`vibe-button${levelling ? ' vibe-button--on' : ''}`}
+            onClick={() => onLevellingChange(!levelling)}
+            title="Play every track at the level the rest of your library sits at, measured rather than tagged. Nothing is ever turned up into the ceiling."
+          >
+            level
+          </button>
 
           <button
             type="button"
