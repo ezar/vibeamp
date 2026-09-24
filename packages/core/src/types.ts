@@ -193,6 +193,26 @@ export interface TrackAnalysis {
   windows: WindowFeatures[];
 }
 
+/**
+ * A name this library worked out for a file whose tags carry none.
+ *
+ * Kept beside the tags rather than written into them. Two reasons, and both are
+ * about being able to change your mind: a tag is what the file says about itself
+ * and a guess must never be mistaken for one, and a folder rescan re-reads the
+ * tags, which would wipe anything written into that field. Nothing here is ever
+ * written back to the file on disk.
+ */
+export interface GivenName {
+  artist: string | null;
+  title: string | null;
+  album: string | null;
+  trackNo: number | null;
+  /** How it was arrived at. See `orphans.ts`. */
+  source: 'sound' | 'path';
+  /** When it was accepted, so a later, better guess can be told from an older one. */
+  at: number;
+}
+
 export interface Track {
   /** Content hash: `sha-256(first MiB + ':' + size)`, hex. */
   id: string;
@@ -213,6 +233,13 @@ export interface Track {
   errorMessage?: string;
   /** Attempts so far, for the retry backoff. */
   attempts: number;
+  /**
+   * The name this library gave the file, if somebody accepted one.
+   *
+   * Optional because rows written before this existed do not have the field, and a
+   * library is not rebuilt to add one.
+   */
+  given?: GivenName | null;
 }
 
 /** A folder the user has granted access to. */

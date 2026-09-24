@@ -488,3 +488,162 @@
     font-size: 10px;
   }
 }
+
+/* ---- names for the files that have none ---- */
+
+/*
+ * Two badges of their own. Green for a name that came out of the audio, because
+ * that is the one this program can do and no tag editor can; the ordinary amber
+ * for a name read off a folder, which is a guess about somebody's filing.
+ */
+.library-issue--sound {
+  background: var(--vibe-display);
+}
+
+.library-issue--path {
+  background: var(--vibe-warning);
+}
+
+.library-names {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  line-height: 1.6;
+}
+
+.library-names > li {
+  display: grid;
+  /* The badge and the old name size to their text so that the proposed name sits
+     right beside the file it replaces: this row is a rename, and a column of air
+     between the two halves would stop it reading as one. */
+  grid-template-columns: auto auto auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+/* The arrow that makes the row a rename rather than two facts side by side. */
+.library-names-to {
+  color: var(--vibe-light);
+}
+
+.library-names-was,
+.library-names-now,
+.library-names-from {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.library-names-was {
+  color: var(--vibe-light);
+}
+
+.library-names-now {
+  color: var(--vibe-display);
+}
+
+.library-names-from {
+  grid-column: 1 / -1;
+  padding-left: 2px;
+  font-size: 9px;
+  color: var(--vibe-light);
+}
+
+/* ---- the want list ---- */
+
+.library-want-input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 4px 5px;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 10px;
+  color: var(--vibe-display);
+  background: var(--vibe-face-dark);
+  /* Inset, like every field in the shell: this is somewhere text goes in. */
+  border-top: 1px solid var(--vibe-shadow);
+  border-left: 1px solid var(--vibe-shadow);
+  border-right: 1px solid var(--vibe-light);
+  border-bottom: 1px solid var(--vibe-light);
+  resize: vertical;
+}
+
+.library-want-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+/*
+ * A file input dressed as one of the shell's buttons.
+ *
+ * The input itself is unreachable rather than `display: none`: a hidden input is
+ * still focusable by keyboard, and taking it out of the tree would take the label
+ * with it.
+ */
+.library-want-open {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.library-want-open input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.library-want-lists {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.library-want-column h4 {
+  margin: 0 0 4px;
+  font-size: 9px;
+  font-weight: normal;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--vibe-light);
+}
+
+.library-want-column ol {
+  margin: 0;
+  padding-left: 16px;
+  line-height: 1.6;
+}
+
+.library-want-column li {
+  padding-bottom: 3px;
+}
+
+.library-want-line {
+  color: var(--vibe-display);
+}
+
+/* The one sentence about a record nobody here has heard. Set apart from the
+   line above it so it cannot be read as part of the title. */
+.library-want-note {
+  display: block;
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--vibe-light);
+}
+
+@media (max-width: 720px) {
+  /* Two columns of names in a 320px column is four characters each. */
+  .library-names > li {
+    grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .library-want-lists {
+    grid-template-columns: 1fr;
+  }
+}

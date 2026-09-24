@@ -45,6 +45,19 @@ export type {
   TempoGap,
   KeyIsland,
 } from './shape.js';
+export { normaliseName, splitArtistTitle, inferFromPath } from './naming.js';
+export type { InferredName } from './naming.js';
+export { isOrphan, proposeNames, withGivenName } from './orphans.js';
+export type { NameSource, ProposedName, OrphanOptions } from './orphans.js';
+export { matchWantList } from './wantList.js';
+export type {
+  WantEntry,
+  WantVia,
+  WantRow,
+  WantReport,
+  WantOptions,
+  ArtistNote,
+} from './wantList.js';
 export { libraryHealth, HEALTH_TRACKS_SHOWN } from './health.js';
 export type { LibraryHealth, HealthFinding, HealthIssue } from './health.js';
 export {

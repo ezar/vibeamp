@@ -42,8 +42,22 @@ import {
   parseExport,
   promptForExport,
 } from '../library/exchange.js';
-import { findDuplicates, libraryHealth, libraryShape } from '@vibeamp/core';
-import type { DuplicateGroup, LibraryHealth, LibraryShape, Track } from '@vibeamp/core';
+import {
+  findDuplicates,
+  libraryHealth,
+  libraryShape,
+  matchWantList,
+  proposeNames,
+} from '@vibeamp/core';
+import { parseWantList } from '../library/wantList.js';
+import type {
+  DuplicateGroup,
+  LibraryHealth,
+  LibraryShape,
+  ProposedName,
+  Track,
+  WantReport,
+} from '@vibeamp/core';
 import type { VibePreset } from '@vibeamp/dj';
 import { vibeFromUrl, vibeLink } from './vibeLink.js';
 import { defaultWorkerCount } from '../analysis/pool.js';
@@ -82,8 +96,13 @@ export function App(): React.JSX.Element {
     shape: LibraryShape | null;
     duplicates: readonly DuplicateGroup[] | null;
     health: LibraryHealth | null;
+    names: readonly ProposedName[] | null;
+    namedCount: number;
     working: boolean;
   } | null>(null);
+  // The last list somebody matched. Kept beside the X-ray rather than inside it
+  // because it survives a re-measure: nobody wants to paste the list again.
+  const [want, setWant] = useState<WantReport | null>(null);
   const narrow = useIsNarrow();
   const store = useAppStore();
   const debugOpen = useDebugPanel();
@@ -452,17 +471,83 @@ export function App(): React.JSX.Element {
     const current = runtime.current;
     if (current === null) return;
 
-    setXray({ shape: null, duplicates: null, health: null, working: true });
+    setXray({
+      shape: null,
+      duplicates: null,
+      health: null,
+      names: null,
+      namedCount: 0,
+      working: true,
+    });
     const tracks = await current.services.repository.allTracks();
-    // Yielded to once more so the window paints before the two passes begin.
+    // Yielded to once more so the window paints before the passes begin.
     await new Promise((resolve) => setTimeout(resolve, 0));
     setXray({
       shape: libraryShape(tracks),
       duplicates: findDuplicates(tracks),
       health: libraryHealth(tracks),
+      names: proposeNames(tracks),
+      namedCount: tracks.filter((track) => (track.given ?? null) !== null).length,
       working: false,
     });
   }, []);
+
+  /**
+   * Store the names worked out for the files that have none.
+   *
+   * Into this library's index, never into the file: see `repository.applyNames`.
+   * The list is re-measured afterwards, so the accepted rows leave the window and
+   * the want list can immediately find the files they named.
+   */
+  const handleAcceptNames = useCallback(async () => {
+    const current = runtime.current;
+    if (current === null) return;
+    const proposals = xray?.names ?? [];
+    if (proposals.length === 0) return;
+
+    const changed = await current.services.repository.applyNames(proposals);
+    setLibraryNotice(`Named ${changed} ${changed === 1 ? 'file' : 'files'}.`);
+    await handleOpenLibrary();
+  }, [xray?.names, handleOpenLibrary]);
+
+  /** Drop every name this library gave itself. The tags were never touched. */
+  const handleForgetNames = useCallback(async () => {
+    const current = runtime.current;
+    if (current === null) return;
+    const forgotten = await current.services.repository.forgetNames();
+    setLibraryNotice(`Forgot ${forgotten} ${forgotten === 1 ? 'name' : 'names'}.`);
+    await handleOpenLibrary();
+  }, [handleOpenLibrary]);
+
+  /**
+   * Match a list of names against the library.
+   *
+   * The proposals go in with it, so a file whose only claim to a name came from its
+   * sound is findable by a list that names it — which is the whole reason this is
+   * in a player that listens to its own files.
+   */
+  const handleMatchWantList = useCallback(
+    async (text: string) => {
+      const current = runtime.current;
+      if (current === null) return;
+
+      const entries = parseWantList(text);
+      if (entries.length === 0) {
+        setWant(null);
+        setLibraryNotice('Nothing in that list that looks like a track.');
+        return;
+      }
+
+      const tracks = await current.services.repository.allTracks();
+      setWant(
+        matchWantList(entries, tracks, {
+          names: xray?.names ?? proposeNames(tracks),
+          shape: xray?.shape ?? libraryShape(tracks),
+        }),
+      );
+    },
+    [xray?.names, xray?.shape],
+  );
 
   /**
    * Write the plan out as one file that both plays and reads.
@@ -652,6 +737,12 @@ export function App(): React.JSX.Element {
           health={xray.health}
           deep={deep}
           onDeepScan={() => void handleDeepScan()}
+          names={xray.names}
+          namedCount={xray.namedCount}
+          onAcceptNames={() => void handleAcceptNames()}
+          onForgetNames={() => void handleForgetNames()}
+          want={want}
+          onMatchWantList={(text) => void handleMatchWantList(text)}
           working={xray.working}
           initialPosition={libraryPosition}
           narrow={narrow}
