@@ -18,7 +18,7 @@ export type KeyScale = 'major' | 'minor';
  * every track analysed by an older version as pending, which is what lets the
  * pipeline improve without a rescan and without losing the rest of the record.
  */
-export const ANALYSIS_VERSION = 3;
+export const ANALYSIS_VERSION = 4;
 
 /** Sample rate the analysis runs at, in hertz. */
 export const TARGET_SAMPLE_RATE = 16000;
@@ -107,6 +107,10 @@ export interface RawFeatures {
   clippedRatio: number;
   /** Side over mid, as RMS. 0 is two identical channels; null for a mono file. */
   sideRatio: number | null;
+  /** Where a beat falls near the start of the track, in seconds. See `beats.ts`. */
+  introBeatSec: number | null;
+  /** The same near the end, in seconds from the start of the track. */
+  outroBeatSec: number | null;
   windows: WindowFeatures[];
 }
 
@@ -190,6 +194,24 @@ export interface TrackAnalysis {
    * ask. It is the one thing the mono pipeline would otherwise throw away.
    */
   sideRatio: number | null;
+  /**
+   * Where a beat falls near the start of the track, in seconds from its start.
+   *
+   * The tempo says how often the beats come; this says when. Every other beat near
+   * the start is this plus a whole number of `60 / bpm`, so one number describes
+   * the grid — which is what lets the next track be brought in *on* a beat rather
+   * than wherever the fade happened to fall. Null when the opening has no pulse
+   * clear enough to act on.
+   */
+  introBeatSec: number | null;
+  /**
+   * The same near the end, in seconds from the start of the track.
+   *
+   * Measured at the end rather than extrapolated from the start. A quarter of a BPM
+   * of error over three minutes is half a beat by the last chorus, and the last
+   * chorus is the only part a fade ever touches.
+   */
+  outroBeatSec: number | null;
   windows: WindowFeatures[];
 }
 

@@ -72,6 +72,9 @@ export interface VibePanelProps {
   /** Cross-fade length in seconds. 0 plays tracks back to back. */
   crossfadeSec: number;
   onCrossfadeChange: (seconds: number) => void;
+  /** Whether the next track enters on a beat of the one going out. */
+  beatAlign: boolean;
+  onBeatAlignChange: (enabled: boolean) => void;
   onShapeChange: (shape: EnergyShape) => void;
   onToggleAutoDj: (enabled: boolean) => void;
   /** Load a `.wsz` the user brings. The app ships no skins of its own. */
@@ -122,6 +125,8 @@ export function VibePanel({
   onCommit,
   crossfadeSec,
   onCrossfadeChange,
+  beatAlign,
+  onBeatAlignChange,
   onShapeChange,
   onToggleAutoDj,
   onLoadSkin,
@@ -292,6 +297,18 @@ export function VibePanel({
               </option>
             ))}
           </select>
+
+          <button
+            type="button"
+            className={`vibe-button vibe-button--beat${beatAlign ? ' vibe-button--on' : ''}`}
+            // Nothing to align into with the fade off, and the button would look
+            // like it was doing something.
+            disabled={crossfadeSec === 0}
+            onClick={() => onBeatAlignChange(!beatAlign)}
+            title="Start the next track on a beat of the one going out. Nothing is sped up: the two records play at their own tempos, and they meet on the first beat."
+          >
+            beat
+          </button>
 
           <div className="vibe-actions">
             <button

@@ -210,6 +210,10 @@ export function App(): React.JSX.Element {
 
       runtime.current = { services, host, bridge, queue, runner: null, skins, crossfade };
       host.media.setCrossfadeSeconds(useAppStore.getState().crossfadeSec);
+      host.media.setBeatAlign(useAppStore.getState().beatAlign);
+      // The engine works in URLs and knows nothing about tracks; the bridge is
+      // where a track and its URL meet, so that is where the grids live.
+      host.media.setGridLookup((url) => bridge.gridsForUrl(url));
 
       const counts = await services.repository.counts();
       useAppStore.getState().setAnalysedCount(counts.done);
@@ -718,6 +722,11 @@ export function App(): React.JSX.Element {
     runtime.current?.host.media.setCrossfadeSeconds(seconds);
   }, []);
 
+  const handleBeatAlignChange = useCallback((enabled: boolean) => {
+    useAppStore.getState().setBeatAlign(enabled);
+    runtime.current?.host.media.setBeatAlign(enabled);
+  }, []);
+
   /** Load a `.wsz` the user brings. The app ships none of its own. */
   const handleLoadSkin = useCallback(async () => {
     const current = runtime.current;
@@ -789,6 +798,8 @@ export function App(): React.JSX.Element {
           onCommit={handleCommit}
           crossfadeSec={store.crossfadeSec}
           onCrossfadeChange={handleCrossfadeChange}
+          beatAlign={store.beatAlign}
+          onBeatAlignChange={handleBeatAlignChange}
           onShapeChange={store.setEnergyShape}
           onToggleAutoDj={handleToggleAutoDj}
           onLoadSkin={() => void handleLoadSkin()}

@@ -7,8 +7,10 @@
  */
 
 import {
+  MIN_GRID_STRENGTH,
   Spectrogram,
   CHROMA_FRAME_SIZE,
+  beatGrid,
   chromaSequence,
   chromaVector,
   clippedRatio,
@@ -43,6 +45,29 @@ const SPECTRAL_HOP_SIZE = 1024;
  * by the time this window starts.
  */
 const TAIL_SEC = 0.25;
+
+/**
+ * How much of each end to read the beat grid from, in seconds.
+ *
+ * Twenty. Long enough to hold thirty beats at a slow tempo, which is a grid rather
+ * than a coincidence, and short enough that a tempo drifting over the length of a
+ * song cannot pull the grid away from the moment a fade actually touches.
+ */
+const EDGE_SEC = 20;
+
+/**
+ * Tempo confidence below which no beat grid is measured.
+ *
+ * The phase of a period nobody believes in is not a fact about the music. Measured:
+ * twenty seconds of a held tone comes back with a tempo of 109 BPM at a confidence
+ * of 0.08 — the estimator returns a number because it always does — and a grid
+ * fitted to it scores 0.41, comfortably over the threshold for a usable one. The
+ * grid is not wrong about the envelope; the envelope has a small periodic ripple
+ * from the framing, and the grid finds it. What is wrong is asking the question at
+ * all, so it is not asked. The same 0.3 the X-ray uses before it will count a
+ * tempo.
+ */
+const MIN_TEMPO_CONFIDENCE = 0.3;
 
 /** An error the pipeline raises, carrying the code the protocol reports. */
 export class ExtractionError extends Error {
@@ -114,6 +139,8 @@ export function extractFeatures(
   const envelope = onsetEnvelope(tempoSlice, sampleRate);
   const tempo = estimateTempo(envelope);
 
+  const edges = beatEdges(samples, sampleRate, tempo);
+
   report('tonal', 0.7);
   const chroma = averageChroma(samples, sampleRate, plan.descriptor);
   const key = estimateKey(chroma);
@@ -151,11 +178,51 @@ export function extractFeatures(
     tailRatio: tailLevel(samples, sampleRate, rmsMean),
     clippedRatio: clippedRatio(samples),
     sideRatio: options.sideRatio ?? null,
+    introBeatSec: edges.introBeatSec,
+    outroBeatSec: edges.outroBeatSec,
     windows,
   };
 
   report('finalizing', 1);
   return features;
+}
+
+/**
+ * Where the beats fall at each end of the track.
+ *
+ * Measured at the two ends and nowhere else, because those are the only moments a
+ * fade touches. Extrapolating one grid across a whole track would be cheaper and
+ * wrong: a quarter of a BPM of error — well inside the estimator's own step — is
+ * half a beat after three minutes.
+ *
+ * Both are returned null for a track with no usable pulse. A grid nobody should
+ * act on is worse than no grid, because the code downstream would act on it.
+ */
+function beatEdges(
+  samples: Float32Array,
+  sampleRate: number,
+  tempo: { bpm: number; confidence: number },
+): { introBeatSec: number | null; outroBeatSec: number | null } {
+  const bpm = tempo.bpm;
+  if (bpm <= 0 || tempo.confidence < MIN_TEMPO_CONFIDENCE) {
+    return { introBeatSec: null, outroBeatSec: null };
+  }
+
+  const length = Math.min(samples.length, Math.round(EDGE_SEC * sampleRate));
+  const tailAt = Math.max(0, samples.length - length);
+
+  const usable = (grid: { phaseSec: number; strength: number } | null): number | null =>
+    grid === null || grid.strength < MIN_GRID_STRENGTH ? null : grid.phaseSec;
+
+  const head = usable(beatGrid(onsetEnvelope(samples.subarray(0, length), sampleRate), bpm));
+  const tail = usable(beatGrid(onsetEnvelope(samples.subarray(tailAt), sampleRate), bpm));
+
+  return {
+    introBeatSec: head,
+    // Back into the track's own timeline: the grid was measured from the start of
+    // the excerpt, and everything downstream reads times from the start of the file.
+    outroBeatSec: tail === null ? null : tailAt / sampleRate + tail,
+  };
 }
 
 /** Every spectral and level descriptor over one window. */

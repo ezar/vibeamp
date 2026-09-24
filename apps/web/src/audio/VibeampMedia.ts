@@ -22,12 +22,25 @@
  */
 
 import { Emitter } from './emitter.js';
+import { alignIncoming } from '@vibeamp/dj';
+import type { TrackGrid } from '@vibeamp/dj';
 import { EQ_BANDS, buildEqualiser, dbToGain, rampTo, sliderToDb } from './eq.js';
 
 /** Default cross-fade length, in seconds. */
 export const DEFAULT_CROSSFADE_SEC = 4;
 /** Longest cross-fade the UI offers, in seconds. */
 export const MAX_CROSSFADE_SEC = 12;
+/**
+ * The beat grids at each end of whatever is at a URL.
+ *
+ * Supplied by whoever owns the URLs, because this class deliberately knows nothing
+ * about tracks — and a fade cannot wait for a database read, since it is happening
+ * now.
+ */
+export type GridLookup = (
+  url: string | null,
+) => { intro: TrackGrid | null; outro: TrackGrid | null } | null;
+
 /** FFT size for the visualiser. Webamp's own spectrum analyser expects this. */
 const FFT_SIZE = 2048;
 /** Smoothing of the visualiser, 0..1. Higher is calmer. */
@@ -60,6 +73,8 @@ export class VibeampMedia {
   private readonly bandValues = new Map<number, number>();
   private preampValue = 50;
   private crossfadeSec = DEFAULT_CROSSFADE_SEC;
+  private beatAlign = false;
+  private grids: GridLookup = () => null;
 
   constructor(context: AudioContext = new AudioContext()) {
     this.context = context;
@@ -241,6 +256,16 @@ export class VibeampMedia {
     return this.crossfadeSec;
   }
 
+  /** Bring the next track in on a beat of the one going out. See `align.ts`. */
+  setBeatAlign(enabled: boolean): void {
+    this.beatAlign = enabled;
+  }
+
+  /** Where to find the beat grids for a URL. */
+  setGridLookup(lookup: GridLookup): void {
+    this.grids = lookup;
+  }
+
   // ---- internals ----
 
   private get current(): Deck {
@@ -312,6 +337,8 @@ export class VibeampMedia {
 
   /** Ramp `outgoing` down and `incoming` up over the cross-fade length. */
   private crossfade(outgoing: Deck, incoming: Deck): void {
+    this.alignToBeat(outgoing, incoming);
+
     const now = this.context.currentTime;
     const end = now + this.crossfadeSec;
 
@@ -334,6 +361,32 @@ export class VibeampMedia {
   }
 
   /**
+   * Start the incoming track from the point that puts its next beat on the
+   * outgoing track's next beat.
+   *
+   * Done here, at the top of the fade, for one reason: the incoming deck is at
+   * zero gain for the next few seconds, so seeking it is completely inaudible. A
+   * second later the same seek would be a click.
+   *
+   * At most one beat of the opening is skipped, and only ever forward — there is
+   * nothing before the start of a file, and the grid repeats anyway, so a beat
+   * later is the same beat.
+   */
+  private alignToBeat(outgoing: Deck, incoming: Deck): void {
+    if (!this.beatAlign) return;
+
+    const at = alignedStart({
+      outgoing: this.grids(outgoing.url)?.outro ?? null,
+      outgoingAtSec: outgoing.element.currentTime,
+      incoming: this.grids(incoming.url)?.intro ?? null,
+      incomingAtSec: incoming.element.currentTime,
+      incomingDurationSec: incoming.element.duration,
+    });
+    if (at === null) return;
+    incoming.element.currentTime = at;
+  }
+
+  /**
    * Push the preamp and band gains into the graph.
    *
    * The headroom gain is the part Webamp's own media does not do: ten bands boosted
@@ -353,4 +406,37 @@ export class VibeampMedia {
     rampTo(this.preamp.gain, dbToGain(sliderToDb(this.preampValue)), this.context);
     rampTo(this.headroom.gain, dbToGain(-boostDb), this.context);
   }
+}
+
+/**
+ * Where the incoming deck should be put so its next beat meets the outgoing one's.
+ *
+ * Separated from the deck it is applied to so that it can be tested without a
+ * browser: the arithmetic lives in `align.ts`, and what is left here is the three
+ * ways it can come to nothing.
+ *
+ * @returns The playhead position to seek to, or null when there is nothing to do —
+ *   either track without a grid, a skip of zero, or a skip that would run off the
+ *   end of a track shorter than one beat's remainder, which would restart it rather
+ *   than nudge it.
+ */
+export function alignedStart(input: {
+  outgoing: TrackGrid | null;
+  outgoingAtSec: number;
+  incoming: TrackGrid | null;
+  incomingAtSec: number;
+  incomingDurationSec: number;
+}): number | null {
+  const alignment = alignIncoming(
+    input.outgoing,
+    input.outgoingAtSec,
+    input.incoming,
+    input.incomingAtSec,
+  );
+  if (alignment === null || alignment.skipSec <= 0) return null;
+
+  const at = input.incomingAtSec + alignment.skipSec;
+  const duration = input.incomingDurationSec;
+  if (Number.isFinite(duration) && at >= duration) return null;
+  return at;
 }

@@ -45,6 +45,8 @@ function makeTrack(spec: Spec): Track {
     tailRatio: spec.tailRatio ?? 0.05,
     clippedRatio: spec.clippedRatio ?? 0,
     sideRatio: spec.sideRatio === undefined ? 0.3 : spec.sideRatio,
+    introBeatSec: 0,
+    outroBeatSec: null,
     windows: [],
   };
 

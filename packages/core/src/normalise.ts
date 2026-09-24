@@ -202,6 +202,8 @@ export function normaliseFeatures(raw: RawFeatures, statistics: LibraryStatistic
     tailRatio: raw.tailRatio,
     clippedRatio: raw.clippedRatio,
     sideRatio: raw.sideRatio,
+    introBeatSec: raw.introBeatSec,
+    outroBeatSec: raw.outroBeatSec,
     windows: raw.windows,
   };
 }

@@ -32,6 +32,14 @@ export interface AppState {
   vibeTarget: VibeTarget;
   energyShape: EnergyShape;
   crossfadeSec: number;
+  /**
+   * Whether the next track enters on a beat of the one going out.
+   *
+   * On by default. It costs nothing when a track has no grid — the fade happens
+   * where the clock says, as it always did — and it is the difference between two
+   * records and a mistake when it does. See `align.ts`.
+   */
+  beatAlign: boolean;
   /** Shown when the browser has no File System Access API. */
   needsReselect: boolean;
   error: string | null;
@@ -45,6 +53,7 @@ export interface AppState {
   setVibe: (patch: Partial<VibeTarget>) => void;
   setEnergyShape: (shape: EnergyShape) => void;
   setCrossfade: (seconds: number) => void;
+  setBeatAlign: (enabled: boolean) => void;
   setNeedsReselect: (needed: boolean) => void;
   setError: (message: string | null) => void;
 }
@@ -68,6 +77,7 @@ export const useAppStore = create<AppState>((set) => ({
   vibeTarget: opened?.target ?? DEFAULT_VIBE_TARGET,
   energyShape: opened?.shape ?? 'arc',
   crossfadeSec: 4,
+  beatAlign: true,
   needsReselect: false,
   error: null,
 
@@ -80,6 +90,7 @@ export const useAppStore = create<AppState>((set) => ({
   setVibe: (patch) => set((state) => ({ vibeTarget: { ...state.vibeTarget, ...patch } })),
   setEnergyShape: (energyShape) => set({ energyShape }),
   setCrossfade: (crossfadeSec) => set({ crossfadeSec }),
+  setBeatAlign: (beatAlign) => set({ beatAlign }),
   setNeedsReselect: (needsReselect) => set({ needsReselect }),
   setError: (error) => set({ error }),
 }));

@@ -287,7 +287,15 @@
 }
 
 .vibe-row .vibe-select--narrow {
-  width: 52px;
+  /* Fixed rather than merely `width`: this row gained a button, and a flex child
+     with a width is still allowed to shrink below it. At 40px the value inside
+     the box is one character and an ellipsis. */
+  flex: 0 0 52px;
+}
+
+/* The auto margin moved here from the select beside it: whatever is last before
+   the buttons is what pushes them to the right. */
+.vibe-row .vibe-button--beat {
   margin-right: auto;
 }
 
@@ -529,7 +537,7 @@
 
   /* Wide enough for "12s" plus the arrow at this font size. */
   .vibe-row .vibe-select--narrow {
-    width: 84px;
+    flex: 0 0 84px;
   }
 
   .vibe-row .vibe-button--autodj {
