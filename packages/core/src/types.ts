@@ -18,7 +18,7 @@ export type KeyScale = 'major' | 'minor';
  * every track analysed by an older version as pending, which is what lets the
  * pipeline improve without a rescan and without losing the rest of the record.
  */
-export const ANALYSIS_VERSION = 5;
+export const ANALYSIS_VERSION = 6;
 
 /** Sample rate the analysis runs at, in hertz. */
 export const TARGET_SAMPLE_RATE = 16000;
@@ -103,6 +103,8 @@ export interface RawFeatures {
   fingerprint: string | null;
   /** RMS of the last moment over the track's own mean. See `health.ts`. */
   tailRatio: number;
+  /** The same for the first moment. See `segue.ts`. */
+  headRatio: number;
   /** Share of the signal sitting in a flat-topped peak, 0..1. A lower bound. */
   clippedRatio: number;
   /** Side over mid, as RMS. 0 is two identical channels; null for a mono file. */
@@ -188,6 +190,16 @@ export interface TrackAnalysis {
    * the average. A file that ends at full level was cut. See `health.ts`.
    */
   tailRatio: number;
+  /**
+   * Level of the track's first moment, over its own mean.
+   *
+   * The mirror of {@link tailRatio}, and measured over the file's first quarter
+   * second for the same reason: music normally starts from nothing, so a track
+   * already at full level in its opening moment did not start there — it was
+   * running before the file began. Two tracks where one ends that way and the next
+   * starts that way are the two halves of one piece of music. See `segue.ts`.
+   */
+  headRatio: number;
   /** Share of the signal sitting in a flat-topped peak, 0..1. A lower bound. */
   clippedRatio: number;
   /**

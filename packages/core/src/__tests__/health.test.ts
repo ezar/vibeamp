@@ -22,6 +22,7 @@ interface Spec {
   tailRatio?: number;
   clippedRatio?: number;
   sideRatio?: number | null;
+  headRatio?: number;
   soundStartSec?: number | null;
   soundEndSec?: number | null;
 }
@@ -46,6 +47,7 @@ function makeTrack(spec: Spec): Track {
     inputs: { loudness: 0.2, brightness: 2000, compression: 5, danceability: 0.6 },
     fingerprint: null,
     tailRatio: spec.tailRatio ?? 0.05,
+    headRatio: spec.headRatio === undefined ? 0.05 : spec.headRatio,
     clippedRatio: spec.clippedRatio ?? 0,
     sideRatio: spec.sideRatio === undefined ? 0.3 : spec.sideRatio,
     introBeatSec: 0,

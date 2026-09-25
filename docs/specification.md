@@ -273,6 +273,7 @@ interface TrackAnalysis {
   inputs: NormalisationInputs;
   fingerprint: string | null; // which recording this is; see below
   tailRatio: number; // level of the last moment, over the track's own mean
+  headRatio: number; // and of the first; see "The tracks a record does not stop between"
   clippedRatio: number; // share of the signal in flat-topped peaks
   sideRatio: number | null; // side over mid; 0 is two identical channels
   introBeatSec: number | null; // where a beat falls as the track begins
@@ -323,7 +324,7 @@ one, and every blank one sits at distance zero from every other.
 
 ### Versioning
 
-`ANALYSIS_VERSION` is a constant, at 5. At start-up the library marks every track
+`ANALYSIS_VERSION` is a constant, at 6. At start-up the library marks every track
 analysed by an older version as pending. The pipeline can improve without a rescan and
 without discarding tags or history; the old descriptors stay readable until better
 ones replace them, so the player keeps working throughout.
@@ -609,6 +610,62 @@ interpolated point for that step and never towards the destination itself, so a
 strong pull means "be where the journey says you should be", not "arrive early".
 After both fixes every step lands within 0.153 of an even one at six steps, and
 0.102 at ten.
+
+### The tracks a record does not stop between
+
+Albums are full of them: the applause that carries over, the note still ringing when
+the next song starts, the whole side of a record that is one piece of music cut into
+six files because a CD needed track marks. Play those with a four second cross-fade
+and the join is destroyed; play them with the ordinary gap between two files and it
+is destroyed differently.
+
+Neither the tags nor the file names say which pairs those are. The two ends of the
+audio do, and they are measured: `tailRatio` was already stored for the condition
+report, and `headRatio` is its mirror over the file's first quarter second.
+
+Three conditions, all required:
+
+- the first track is still at full level in its last moment,
+- the second is already at full level in its first,
+- and the two files are **neighbours on one record** — the same folder, and either
+  consecutive track numbers on the same album or consecutive numbers in the file
+  names, which is what covers a rip with no tags at all.
+
+The third is what keeps this honest. Plenty of music stops dead on a beat and plenty
+opens in full flow; two unrelated tracks that happen to do both are a coincidence,
+and gluing them together is something no player has ever done to somebody's music.
+
+The thresholds are measured through the real pipeline:
+
+| what the file does            | `headRatio` |
+| ----------------------------- | ----------- |
+| begins after 0.4 s of silence | 0.000       |
+| one second fade-in            | 0.142       |
+| half second fade-in           | 0.283       |
+| cut out of continuous music   | 1.017       |
+
+Half sits between the fade-ins and the running start. The fade-in is the case that
+must never be got wrong: a fade is how a record begins, and a player that read one
+as the middle of a piece of music would cut into it on every play. At the other end,
+a three second fade-out measures 0.047 against 0.982 for a track running to its last
+sample.
+
+**What this does not claim** is to know what the record intended. A track that
+genuinely bleeds into the next and one that merely stops hard into a neighbour that
+starts hard look identical from here — the second has no silence to find either.
+That is deliberate rather than a limitation worked around: butting the two together
+is the right answer in both cases, and a four second cross-fade is the wrong one in
+both.
+
+In playback a join takes the two decks whatever the fade is set to, including off,
+because the point of it is that the music does not stop and replacing the track on
+one deck stops it. The overlap is a twentieth of a second — a splice, not a fade,
+there only because an audio element does not start playing at the instant it is
+told to. Two further details follow from the join being one piece of music rather
+than two records meeting: the beat alignment is skipped, since the beat it would
+skip is the music, and the incoming track takes the outgoing one's level
+correction, since a step in the middle of a continuous passage is audible in a way
+the same step between two records is not.
 
 ### Entering on the beat
 

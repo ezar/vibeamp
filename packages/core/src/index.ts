@@ -77,6 +77,8 @@ export {
   PEAK_MARGIN_DB,
   MIN_TRACKS_FOR_LEVELLING,
 } from './levelling.js';
+export { runsInto, segueSideOf, findSegues, ENDS_RUNNING, STARTS_RUNNING } from './segue.js';
+export type { SegueSide, SeguePair } from './segue.js';
 export { libraryHealth, HEALTH_TRACKS_SHOWN } from './health.js';
 export type { LibraryHealth, HealthFinding, HealthIssue } from './health.js';
 export {

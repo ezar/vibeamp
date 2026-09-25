@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CrossfadeScheduler, MIN_TRACK_MULTIPLE } from '../CrossfadeScheduler.js';
+import { CrossfadeScheduler, MIN_TRACK_MULTIPLE, SEGUE_LEAD_SEC } from '../CrossfadeScheduler.js';
 import type { CrossfadeSource } from '../CrossfadeScheduler.js';
 
 /** A stand-in for the audio engine, driven by hand. */
@@ -31,7 +31,7 @@ class FakeMedia implements CrossfadeSource {
   }
 }
 
-function setup(overrides: Partial<{ hasNext: boolean }> = {}) {
+function setup(overrides: Partial<{ hasNext: boolean; segueAhead: boolean }> = {}) {
   const media = new FakeMedia();
   let advances = 0;
   const scheduler = new CrossfadeScheduler({
@@ -40,6 +40,7 @@ function setup(overrides: Partial<{ hasNext: boolean }> = {}) {
       advances++;
     },
     hasNext: () => overrides.hasNext ?? true,
+    segueAhead: () => overrides.segueAhead ?? false,
   });
   return { media, scheduler, advanced: () => advances };
 }
@@ -211,6 +212,53 @@ describe('CrossfadeScheduler', () => {
 
     media.soundEnd = null;
     media.elapsed = 197;
+    scheduler.check();
+    expect(advanced()).toBe(1);
+  });
+
+  it('moves on at the very end where one track runs into the next', () => {
+    // Not four seconds early: a fade of that length across a join destroys the one
+    // thing the join is.
+    const { media, scheduler, advanced } = setup({ segueAhead: true });
+    media.length = 200;
+    media.fade = 4;
+
+    media.elapsed = 199;
+    scheduler.check();
+    expect(advanced()).toBe(0);
+
+    media.elapsed = 200 - SEGUE_LEAD_SEC / 2;
+    scheduler.check();
+    expect(advanced()).toBe(1);
+  });
+
+  it('honours a join even with the fade switched off', () => {
+    // With no fade the shell would put its ordinary gap in the middle of a piece
+    // of music. The two decks are used anyway.
+    const { media, scheduler, advanced } = setup({ segueAhead: true });
+    media.fade = 0;
+    media.length = 200;
+    media.elapsed = 199.9;
+    scheduler.check();
+    expect(advanced()).toBe(1);
+  });
+
+  it('joins a track too short to fade', () => {
+    // A fifteen second interlude that runs into the next track still has to. The
+    // short-track rule is about fading a track away, which is a different thing.
+    const { media, scheduler, advanced } = setup({ segueAhead: true });
+    media.length = 15;
+    media.fade = 6;
+    media.elapsed = 14.9;
+    scheduler.check();
+    expect(advanced()).toBe(1);
+  });
+
+  it('still fades where there is no join', () => {
+    const { media, scheduler, advanced } = setup({ segueAhead: false });
+    media.length = 200;
+    media.fade = 4;
+    media.elapsed = 199;
     scheduler.check();
     expect(advanced()).toBe(1);
   });

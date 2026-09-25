@@ -49,6 +49,7 @@ import {
   decodeShapeCode,
   encodeShapeCode,
   findDuplicates,
+  findSegues,
   libraryHealth,
   libraryShape,
   matchWantList,
@@ -60,6 +61,7 @@ import type {
   LibraryHealth,
   LibraryShape,
   ProposedName,
+  SeguePair,
   ShapeComparison,
   Track,
   WantReport,
@@ -103,6 +105,7 @@ export function App(): React.JSX.Element {
     shape: LibraryShape | null;
     duplicates: readonly DuplicateGroup[] | null;
     health: LibraryHealth | null;
+    segues: readonly SeguePair[] | null;
     names: readonly ProposedName[] | null;
     namedCount: number;
     /** Every analysed track by name, for the journey pickers. */
@@ -213,6 +216,7 @@ export function App(): React.JSX.Element {
         media: host.media,
         advance: () => host.webamp.nextTrack(),
         hasNext: () => bridge.remainingAfter(host.media.currentUrl()) > 0,
+        segueAhead: () => bridge.segueFollows(host.media.currentUrl()),
       });
       crossfade.start();
 
@@ -509,6 +513,7 @@ export function App(): React.JSX.Element {
       shape: null,
       duplicates: null,
       health: null,
+      segues: null,
       names: null,
       namedCount: 0,
       catalogue: [],
@@ -521,6 +526,7 @@ export function App(): React.JSX.Element {
       shape: libraryShape(tracks),
       duplicates: findDuplicates(tracks),
       health: libraryHealth(tracks),
+      segues: findSegues(tracks),
       names: proposeNames(tracks),
       namedCount: tracks.filter((track) => (track.given ?? null) !== null).length,
       catalogue: catalogueOf(tracks),
@@ -937,6 +943,7 @@ export function App(): React.JSX.Element {
           health={xray.health}
           deep={deep}
           onDeepScan={() => void handleDeepScan()}
+          segues={xray.segues}
           names={xray.names}
           namedCount={xray.namedCount}
           onAcceptNames={() => void handleAcceptNames()}

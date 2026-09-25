@@ -15,8 +15,8 @@ import type Webamp from 'webamp';
 import type { Track as WebampTrack } from 'webamp';
 import { gridOf } from '@vibeamp/dj';
 import type { TrackGrid } from '@vibeamp/dj';
-import { trimDb } from '@vibeamp/core';
-import type { Track } from '@vibeamp/core';
+import { runsInto, segueSideOf, trimDb } from '@vibeamp/core';
+import type { SegueSide, Track } from '@vibeamp/core';
 
 export interface QueuedEntry {
   track: Track;
@@ -35,6 +35,8 @@ export interface UrlPlayback {
   soundStartSec: number | null;
   /** When it stops, in seconds from the start of the file. */
   soundEndSec: number | null;
+  /** What the join test needs from this track. See `segue.ts`. */
+  segue: SegueSide | null;
 }
 
 export class PlaylistBridge {
@@ -103,6 +105,29 @@ export class PlaylistBridge {
     this.loudnessReferenceDb = referenceDb;
   }
 
+  /**
+   * The URL the shell will play after this one, or null when there is none.
+   *
+   * The cross-fade scheduler needs it to ask whether the next track runs straight
+   * out of this one, which is a question about the pair and not about either track.
+   */
+  nextUrlAfter(url: string | null): string | null {
+    const playlist = this.webamp.getPlaylistTracks();
+    const index = url === null ? -1 : playlist.findIndex((entry) => entry.url === url);
+    if (index === -1) return null;
+    return playlist[index + 1]?.url ?? null;
+  }
+
+  /** Does the track at `url` run straight into the one the shell plays next? */
+  segueFollows(url: string | null): boolean {
+    const next = this.nextUrlAfter(url);
+    if (next === null) return false;
+    return runsInto(
+      this.playbackForUrl(url)?.segue ?? null,
+      this.playbackForUrl(next)?.segue ?? null,
+    );
+  }
+
   /** Our track id for a URL the shell reported, or `null` if we did not queue it. */
   trackIdForUrl(url: string | null): string | null {
     if (url === null) return null;
@@ -150,6 +175,7 @@ export class PlaylistBridge {
       trimDb: trimDb(track, this.loudnessReferenceDb),
       soundStartSec: track.analysis?.soundStartSec ?? null,
       soundEndSec: track.analysis?.soundEndSec ?? null,
+      segue: segueSideOf(track),
     });
 
     return {
