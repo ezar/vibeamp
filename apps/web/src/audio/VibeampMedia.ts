@@ -24,6 +24,8 @@
 import { Emitter } from './emitter.js';
 import { alignIncoming } from '@vibeamp/dj';
 import type { TrackGrid } from '@vibeamp/dj';
+import { runsInto } from '@vibeamp/core';
+import type { SegueSide } from '@vibeamp/core';
 import { EQ_BANDS, buildEqualiser, dbToGain, rampTo, sliderToDb } from './eq.js';
 
 /** Default cross-fade length, in seconds. */
@@ -44,6 +46,7 @@ export type PlaybackLookup = (url: string | null) => {
   trimDb: number;
   soundStartSec: number | null;
   soundEndSec: number | null;
+  segue: SegueSide | null;
 } | null;
 
 /**
@@ -53,6 +56,17 @@ export type PlaybackLookup = (url: string | null) => {
  * and a seek nobody notices is a seek not worth making.
  */
 const MIN_TRIMMED_SILENCE_SEC = 0.5;
+
+/**
+ * The fade used where one track runs straight into the next, in seconds.
+ *
+ * A twentieth of a second: a splice, not a fade. It is there because an audio
+ * element does not start playing at the instant it is told to, and fifty
+ * milliseconds of overlap covers that without being heard as anything. A real
+ * cross-fade here would destroy the join, which is the whole point; no overlap at
+ * all would leave a gap in the middle of a piece of music.
+ */
+const SEGUE_SPLICE_SEC = 0.05;
 
 /** FFT size for the visualiser. Webamp's own spectrum analyser expects this. */
 const FFT_SIZE = 2048;
@@ -231,10 +245,15 @@ export class VibeampMedia {
    */
   async loadFromUrl(url: string, autoPlay: boolean): Promise<void> {
     const playing = !this.current.element.paused && this.current.element.currentTime > 0;
-    const shouldCrossfade = playing && autoPlay && this.crossfadeSec > 0;
+    // A join uses the two decks whatever the fade is set to, including off: the
+    // point of it is that the music does not stop, and replacing the track on one
+    // deck stops it.
+    const segue = this.runsInto(this.current.url, url);
+    const fadeSec = segue ? SEGUE_SPLICE_SEC : this.crossfadeSec;
+    const shouldCrossfade = playing && autoPlay && fadeSec > 0;
 
     const target = shouldCrossfade ? this.decks[this.activeDeck === 0 ? 1 : 0] : this.current;
-    this.loadInto(target, url);
+    this.loadInto(target, url, segue ? this.current : null);
 
     if (shouldCrossfade) {
       const outgoing = this.current;
@@ -243,7 +262,7 @@ export class VibeampMedia {
       // Before the fade rather than during it, so the beat alignment inside the
       // fade starts from where the music actually begins.
       this.trimHead(target);
-      this.crossfade(outgoing, target);
+      this.crossfade(outgoing, target, fadeSec, segue);
       return;
     }
 
@@ -251,6 +270,11 @@ export class VibeampMedia {
       await this.play();
       this.trimHead(this.current);
     }
+  }
+
+  /** Does the track at one URL run straight into the track at the other? */
+  private runsInto(fromUrl: string | null, toUrl: string | null): boolean {
+    return runsInto(this.playback(fromUrl)?.segue ?? null, this.playback(toUrl)?.segue ?? null);
   }
 
   dispose(): void {
@@ -384,11 +408,11 @@ export class VibeampMedia {
    * identify the track. Revoking another owner's URL makes a track fail to load the
    * second time it is played.
    */
-  private loadInto(deck: Deck, url: string): void {
+  private loadInto(deck: Deck, url: string, continuing: Deck | null): void {
     deck.url = url;
     deck.element.src = url;
     deck.gain.gain.value = 1;
-    this.applyTrim(deck);
+    this.applyTrim(deck, continuing);
   }
 
   /**
@@ -399,8 +423,13 @@ export class VibeampMedia {
    * new track. The one case where it runs on a playing deck is the switch being
    * turned on or off, where a step of a few decibels is what was asked for.
    */
-  private applyTrim(deck: Deck): void {
-    const db = this.levelling ? (this.playback(deck.url)?.trimDb ?? 0) : 0;
+  private applyTrim(deck: Deck, continuing: Deck | null = null): void {
+    // Across a join the incoming track takes the outgoing one's level. The two are
+    // neighbours on one record and their corrections differ by a fraction of a
+    // decibel, but the join is a continuous piece of music and a step in the middle
+    // of one is audible in a way the same step between two records is not.
+    const source = continuing ?? deck;
+    const db = this.levelling ? (this.playback(source.url)?.trimDb ?? 0) : 0;
     deck.trim.gain.value = dbToGain(db);
   }
 
@@ -426,11 +455,14 @@ export class VibeampMedia {
   }
 
   /** Ramp `outgoing` down and `incoming` up over the cross-fade length. */
-  private crossfade(outgoing: Deck, incoming: Deck): void {
-    this.alignToBeat(outgoing, incoming);
+  private crossfade(outgoing: Deck, incoming: Deck, fadeSec: number, segue: boolean): void {
+    // Not across a join. Beat alignment skips up to a beat of the incoming track's
+    // opening, which is right when two records meet and wrong when the two halves
+    // are one piece of music: the beat it would skip is the music.
+    if (!segue) this.alignToBeat(outgoing, incoming);
 
     const now = this.context.currentTime;
-    const end = now + this.crossfadeSec;
+    const end = now + fadeSec;
 
     outgoing.gain.gain.cancelScheduledValues(now);
     outgoing.gain.gain.setValueAtTime(outgoing.gain.gain.value, now);
@@ -446,7 +478,7 @@ export class VibeampMedia {
       () => {
         if (this.current !== outgoing) outgoing.element.pause();
       },
-      this.crossfadeSec * 1000 + 100,
+      fadeSec * 1000 + 100,
     );
   }
 

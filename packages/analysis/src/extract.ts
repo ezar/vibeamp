@@ -177,7 +177,8 @@ export function extractFeatures(
     // Measured over the whole signal rather than the descriptor windows: both of
     // these are about the file, not about the music, and a defect at the very end
     // is exactly what the windows are placed to avoid looking at.
-    tailRatio: tailLevel(samples, sampleRate, rmsMean),
+    tailRatio: edgeLevel(samples, sampleRate, rmsMean, 'end'),
+    headRatio: edgeLevel(samples, sampleRate, rmsMean, 'start'),
     clippedRatio: clippedRatio(samples),
     sideRatio: options.sideRatio ?? null,
     introBeatSec: edges.introBeatSec,
@@ -270,21 +271,33 @@ function measureWindow(
 }
 
 /**
- * Level of the track's last moment, over its own mean.
+ * Level of one end of the track, over its own mean.
  *
- * Music stops by decaying: a fade, a released note, a room going quiet. The final
- * quarter second of an ordinary track is a small fraction of its average level. A
- * file that was cut short ends at full level, and this is the number that says so.
+ * Music starts from nothing and stops by decaying: a fade, a released note, a room
+ * going quiet. The first and last quarter second of an ordinary track are a small
+ * fraction of its average level. A file that was cut short ends at full level, and
+ * one that begins at full level was already running when the file started — which
+ * is what an album segue looks like from one side.
  *
- * It is deliberately a ratio and not a verdict. Plenty of music genuinely stops
- * dead on a beat, so this measures and `health.ts` decides what to say about it.
+ * Deliberately a ratio and not a verdict. Plenty of music stops dead on a beat, so
+ * this measures and `health.ts` and `segue.ts` decide what to say about it.
+ *
+ * Measured over the file's own ends rather than the music's, which also answers
+ * "is there padding here": a track with four seconds of run-out scores near zero.
  *
  * @returns The ratio, or 0 when there is nothing to compare against.
  */
-function tailLevel(samples: Float32Array, sampleRate: number, meanRms: number): number {
+function edgeLevel(
+  samples: Float32Array,
+  sampleRate: number,
+  meanRms: number,
+  which: 'start' | 'end',
+): number {
   if (meanRms <= 0 || samples.length === 0) return 0;
   const length = Math.min(samples.length, Math.max(1, Math.round(TAIL_SEC * sampleRate)));
-  return rms(samples.subarray(samples.length - length)) / meanRms;
+  const slice =
+    which === 'end' ? samples.subarray(samples.length - length) : samples.subarray(0, length);
+  return rms(slice) / meanRms;
 }
 
 /**

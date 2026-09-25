@@ -796,3 +796,29 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- the tracks a record does not stop between ---- */
+
+.library-segues {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  line-height: 1.6;
+}
+
+.library-segues > li {
+  display: grid;
+  /* The first name hugs its own text so the arrow follows it immediately: the line
+     has to read as one thing running into another, and a column of air between the
+     name and the arrow breaks that. The second name takes what is left. */
+  grid-template-columns: minmax(0, max-content) auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+@media (max-width: 720px) {
+  .library-segues > li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

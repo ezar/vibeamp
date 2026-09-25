@@ -46,7 +46,25 @@ export interface CrossfadeSchedulerOptions {
   advance: () => void;
   /** Whether there is a next track to move to. */
   hasNext: () => boolean;
+  /**
+   * Whether the current track runs straight into the next one. See `segue.ts`.
+   *
+   * A join is not faded: the shell is moved on right at the end of the music
+   * instead, and the two decks overlap only by the splice the audio engine uses to
+   * cover an element's start-up. Fading a join by four seconds would destroy it,
+   * and the ordinary gap between two files would destroy it differently.
+   */
+  segueAhead?: () => boolean;
 }
+
+/**
+ * How early the shell is moved on where one track runs into the next, in seconds.
+ *
+ * Three tenths. It has to cover the audio engine's own splice and the moment an
+ * element takes to start, and no more than that: every tenth of a second here is a
+ * tenth of a second of the outgoing track that plays under the incoming one.
+ */
+export const SEGUE_LEAD_SEC = 0.3;
 
 export class CrossfadeScheduler {
   /** The track this has already advanced out of, so it fires once per track. */
@@ -72,13 +90,17 @@ export class CrossfadeScheduler {
    * Exposed so the tests can drive it directly rather than through an event.
    */
   check(): void {
-    const { media, advance, hasNext } = this.options;
-
-    const fade = media.getCrossfadeSeconds();
-    if (fade <= 0) return;
+    const { media, advance, hasNext, segueAhead } = this.options;
 
     const url = media.currentUrl();
     if (url === null || url === this.firedFor) return;
+
+    // A join is honoured whatever the fade is set to, including off: the point of
+    // it is that the music does not stop, and left alone the shell would put a gap
+    // there.
+    const joined = segueAhead?.() === true;
+    const fade = joined ? SEGUE_LEAD_SEC : media.getCrossfadeSeconds();
+    if (fade <= 0) return;
 
     const duration = media.duration();
     const elapsed = media.timeElapsed();
@@ -90,7 +112,9 @@ export class CrossfadeScheduler {
     // of run-out would otherwise put four seconds of silence in the middle of a
     // set, which is exactly what a cross-fade is for avoiding.
     const end = endOfMusic(duration, media.soundEndSeconds());
-    if (end < fade * MIN_TRACK_MULTIPLE) return;
+    // The short-track rule is about fading a track away, not about a join: a
+    // fifteen second interlude that runs into the next track still has to.
+    if (!joined && end < fade * MIN_TRACK_MULTIPLE) return;
 
     if (end - elapsed > fade) return;
     // Advancing with nothing to advance into would stop playback early rather than

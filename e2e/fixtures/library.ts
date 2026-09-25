@@ -653,3 +653,55 @@ function infoChunk(id: string, text: string): Buffer {
   header.writeUInt32LE(body.length, 4);
   return Buffer.concat([header, padded]);
 }
+
+/**
+ * A record with a join in the middle of it, for the tracks that run together.
+ *
+ * Built so that only one of the four pairs qualifies, and so that each of the ways
+ * a pair can fail to is represented: a fade-out before it, a fade-in after it, and
+ * a track in another folder whose numbering happens to continue.
+ */
+export function writeSegueLibrary(): {
+  dir: string;
+  tracks: GeneratedTrack[];
+  /** The one pair that runs together, in the order it runs. */
+  join: [string, string];
+} {
+  const dir = mkdtempSync(join(tmpdir(), 'vibeamp-segue-'));
+  const seconds = 25;
+  const tracks: GeneratedTrack[] = [];
+
+  mkdirSync(join(dir, 'Pixies', 'Doolittle'), { recursive: true });
+  mkdirSync(join(dir, 'Slint', 'Spiderland'), { recursive: true });
+
+  const add = (path: string, samples: Float32Array, bpm: number): void => {
+    writeFileSync(join(dir, path), wav(samples));
+    tracks.push({ fileName: path.slice(path.lastIndexOf('/') + 1), bpm, key: 'Am' });
+  };
+
+  /** A linear fade in over `length` seconds. */
+  const fadeIn = (samples: Float32Array, length: number): Float32Array => {
+    const out = Float32Array.from(samples);
+    const frames = Math.round(length * RATE);
+    for (let i = 0; i < frames; i += 1) out[i] = (out[i] ?? 0) * (i / frames);
+    return out;
+  };
+
+  const album = 'Pixies/Doolittle';
+  const body = (bpm: number, seed: number): Float32Array =>
+    progressionTrack(bpm, 57, true, seconds, seed);
+
+  // Opens and closes on its own: nothing joins to it in either direction.
+  add(`${album}/01 opens.wav`, fadeIn(faded(body(120, 31)), 1), 120);
+  // Ends at full level, and the next one is already going when it starts. This is
+  // the pair.
+  add(`${album}/02 stops dead.wav`, fadeIn(body(124, 32), 1), 124);
+  add(`${album}/03 already going.wav`, faded(body(124, 33)), 124);
+  // Ends at full level, but the track after it fades in, so there is no join.
+  add(`${album}/04 fades in.wav`, fadeIn(faded(body(128, 34)), 1), 128);
+
+  // Another record entirely, whose numbering continues. Same edges, no join.
+  add('Slint/Spiderland/05 elsewhere.wav', body(132, 35), 132);
+
+  return { dir, tracks, join: ['02 stops dead.wav', '03 already going.wav'] };
+}

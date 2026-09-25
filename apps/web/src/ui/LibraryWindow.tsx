@@ -21,6 +21,7 @@ import type {
   LibraryHealth,
   LibraryShape,
   ProposedName,
+  SeguePair,
   ShapeComparison,
   Track,
   WantReport,
@@ -49,6 +50,8 @@ export interface LibraryWindowProps {
   deep: DeepScanState | null;
   /** Start the second decode. Null when there is nothing reachable to read. */
   onDeepScan: (() => void) | null;
+  /** The pairs of tracks that run together. Null before the pass has run. */
+  segues: readonly SeguePair[] | null;
   /** Names worked out for the files that have none. Null before the pass has run. */
   names: readonly ProposedName[] | null;
   /** How many files already carry a name this library gave them. */
@@ -115,6 +118,7 @@ export function LibraryWindow({
   health,
   deep,
   onDeepScan,
+  segues,
   names,
   namedCount,
   onAcceptNames,
@@ -182,6 +186,8 @@ export function LibraryWindow({
         )}
 
         {health !== null && <Health health={health} deep={deep} onDeepScan={onDeepScan} />}
+
+        {segues !== null && <Segues pairs={segues} />}
 
         {names !== null && (
           <Names
@@ -1276,5 +1282,66 @@ function Picker({
         ))}
       </datalist>
     </label>
+  );
+}
+
+/** Joins listed before the rest are folded away. */
+const SEGUES_SHOWN = 10;
+
+/**
+ * The tracks a record does not stop between.
+ *
+ * Shown because the player acts on it: these pairs are butted together rather than
+ * cross-faded, whatever the fade is set to, and somebody who has chosen an eight
+ * second fade deserves to know where it is not being applied and why.
+ *
+ * Every other player treats a file boundary as a track boundary. This one can tell
+ * the difference because it listened to both ends.
+ */
+function Segues({ pairs }: { pairs: readonly SeguePair[] }): React.JSX.Element {
+  const shown = pairs.slice(0, SEGUES_SHOWN);
+
+  return (
+    <section className="library-section library-section--wide library-section--segues">
+      <h3>runs together</h3>
+      {pairs.length === 0 ? (
+        <p className="library-note">
+          Nothing here runs into anything else: every track starts and ends on its own. Where two do
+          run together, they are played butted up rather than faded.
+        </p>
+      ) : (
+        <>
+          <p className="library-note">
+            {pairs.length} {pairs.length === 1 ? 'pair runs' : 'pairs run'} together — one ends at
+            full level and the next starts there, and they are neighbours on a record. Played butted
+            up rather than faded, whatever the fade is set to.
+          </p>
+          <ul className="library-segues">
+            {shown.map((pair) => (
+              <li key={`${pair.from.id}-${pair.to.id}`}>
+                <span className="library-journey-title" title={pair.from.relPath}>
+                  {displayName(pair.from)}
+                </span>
+                <span className="library-names-to" aria-hidden="true">
+                  →
+                </span>
+                <span className="library-journey-title" title={pair.to.relPath}>
+                  {displayName(pair.to)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {pairs.length > shown.length && (
+            <p className="library-note">and {pairs.length - shown.length} more.</p>
+          )}
+        </>
+      )}
+      {/* Said because it is the honest limit of the measurement, and because
+          somebody will otherwise wonder why a pair they expected is missing. */}
+      <p className="library-legend">
+        Read off the two ends, not off the tags. A track that stops dead into one that starts on a
+        beat looks the same from here as a true bleed — and wants the same treatment.
+      </p>
+    </section>
   );
 }

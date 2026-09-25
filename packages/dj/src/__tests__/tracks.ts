@@ -42,6 +42,7 @@ export function makeTrack(spec: TrackSpec): Track {
     inputs: { loudness: 0.2, brightness: 2000, compression: 5, danceability: 0.6 },
     fingerprint: null,
     tailRatio: 0.05,
+    headRatio: 0.05,
     clippedRatio: 0,
     sideRatio: 0.4,
     introBeatSec: 0,

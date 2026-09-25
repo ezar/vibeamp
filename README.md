@@ -92,6 +92,13 @@ per track.
   a move it can explain. Nothing is sped up or slowed down — it is a route through a
   collection, not a mix. No service can do it, because nothing a service stores
   about a track is a distance to another one.
+- **Knows which tracks a record does not stop between.** The applause that carries
+  over, the note still ringing when the next song starts, the side of a record cut
+  into six files because a CD needed track marks. Neither the tags nor the file
+  names say which pairs those are; the two ends of the audio do, and vibeamp
+  measured them. Those pairs are butted together rather than cross-faded, whatever
+  you have the fade set to — and the library window lists them, so you can see where
+  your eight-second fade is not being applied and why.
 - **Brings the next track in on the beat.** Not beatmatching — nothing is sped up,
   and both records play at their own tempo. The incoming track simply starts from
   the point that puts its first beat where the outgoing track's next beat falls, and

@@ -53,6 +53,7 @@ function features(overrides: Partial<RawFeatures> = {}): RawFeatures {
     danceabilityRaw: 0.7,
     fingerprint: null,
     tailRatio: 0.05,
+    headRatio: 0.05,
     clippedRatio: 0,
     sideRatio: 0.4,
     introBeatSec: 0.12,

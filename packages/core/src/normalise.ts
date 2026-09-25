@@ -230,6 +230,7 @@ export function normaliseFeatures(raw: RawFeatures, statistics: LibraryStatistic
     inputs,
     fingerprint: raw.fingerprint,
     tailRatio: raw.tailRatio,
+    headRatio: raw.headRatio,
     clippedRatio: raw.clippedRatio,
     sideRatio: raw.sideRatio,
     introBeatSec: raw.introBeatSec,
